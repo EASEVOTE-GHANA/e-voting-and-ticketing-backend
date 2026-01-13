@@ -62,6 +62,10 @@ export interface IEvent extends Document {
   minVotesPerPurchase?: number;
   maxVotesPerPurchase?: number;
   allowPublicNominations?: boolean;
+  votingStartTime?: Date;
+  votingEndTime?: Date;
+  liveResults?: boolean;
+  showVoteCount?: boolean;
   categories?: ICategory[];
   
   // Ticketing specific
@@ -143,6 +147,10 @@ const eventSchema = new Schema<IEvent>({
       message: 'allowPublicNominations is only valid for VOTING events'
     }
   },
+  votingStartTime: { type: Date },
+  votingEndTime: { type: Date },
+  liveResults: { type: Boolean, default: true },
+  showVoteCount: { type: Boolean, default: true },
   categories: {
     type: [categorySchema],
     validate: {

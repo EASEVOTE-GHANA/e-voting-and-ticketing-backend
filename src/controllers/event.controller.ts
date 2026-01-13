@@ -148,3 +148,15 @@ export const deleteTicketType = asyncHandler(async (req: Request, res: Response)
   const result = await TicketService.deleteTicketType(eventId, ticketTypeId, req.user!.id, req.user!.role);
   res.json(result);
 });
+
+export const toggleLiveResults = asyncHandler(async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const result = await EventService.toggleLiveResults(id, req.user!.id, req.user!.role);
+  res.json(result);
+});
+
+export const toggleShowVoteCount = asyncHandler(async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const result = await EventService.toggleShowVoteCount(id, req.user!.id, req.user!.role);
+  res.json(result);
+});

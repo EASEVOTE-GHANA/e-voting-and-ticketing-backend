@@ -57,14 +57,29 @@ export class VoteService {
       throw new AppError("Event not found", 404);
     }
 
-    return event.categories?.map(category => ({
-      categoryId: category._id,
-      categoryName: category.name,
-      candidates: category.candidates.map(candidate => ({
+    return event.categories?.map(category => {
+      let candidates = category.candidates.map(candidate => ({
         candidateId: candidate._id,
         name: candidate.name,
-        voteCount: candidate.votes || 0
-      }))
-    }));
+        code: candidate.code,
+        voteCount: event.liveResults ? (candidate.votes || 0) : undefined
+      }));
+
+      // Sort by votes for ranking
+      candidates.sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0));
+
+      // Add ranking and conditionally show vote counts
+      candidates = candidates.map((candidate, index) => ({
+        ...candidate,
+        rank: index + 1,
+        voteCount: event.showVoteCount ? candidate.voteCount : undefined
+      }));
+
+      return {
+        categoryId: category._id,
+        categoryName: category.name,
+        candidates
+      };
+    });
   }
 }

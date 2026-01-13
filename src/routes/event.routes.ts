@@ -25,7 +25,9 @@ import {
   updateCandidate,
   deleteCandidate,
   updateTicketType,
-  deleteTicketType
+  deleteTicketType,
+  toggleLiveResults,
+  toggleShowVoteCount
 } from "../controllers/event.controller";
 
 const router = Router();
@@ -53,6 +55,8 @@ router.post("/:id/ticket-types", authenticate, requireRole("ORGANIZER"), addTick
 router.put("/:eventId/ticket-types/:ticketTypeId", authenticate, requireRole("ORGANIZER", "ADMIN", "SUPER_ADMIN"), updateTicketType);
 router.delete("/:eventId/ticket-types/:ticketTypeId", authenticate, requireRole("ORGANIZER", "ADMIN", "SUPER_ADMIN"), deleteTicketType);
 router.delete("/:id", authenticate, deleteEvent);
+router.patch("/:id/toggle-live-results", authenticate, requireRole("ORGANIZER", "ADMIN", "SUPER_ADMIN"), toggleLiveResults);
+router.patch("/:id/toggle-vote-count", authenticate, requireRole("ORGANIZER", "ADMIN", "SUPER_ADMIN"), toggleShowVoteCount);
 
 // Admin routes
 router.get("/admin/all", authenticate, requireRole("ADMIN", "SUPER_ADMIN"), getAllEventsForAdmin);

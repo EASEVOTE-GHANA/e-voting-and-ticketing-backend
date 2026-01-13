@@ -20,7 +20,7 @@ export class CategoryService {
     event.categories = event.categories || [];
     event.categories.push(categoryData);
     await event.save();
-    return EventService.filterEventResponse(event);
+    return EventService.filterEventResponse(event, organizerId, undefined);
   }
 
   static async getEventCategories(eventId: string, userId?: string, userRole?: string) {
@@ -44,7 +44,9 @@ export class CategoryService {
       }
     }
     
-    return event.categories || [];
+    // Apply vote display rules
+    const filteredEvent = EventService.filterEventResponse(event);
+    return filteredEvent.categories || [];
   }
 
   static async getCategoryWithCandidates(eventId: string, categoryId: string, userId?: string, userRole?: string) {
@@ -68,7 +70,9 @@ export class CategoryService {
       }
     }
     
-    const category = event.categories?.find(cat => cat._id?.toString() === categoryId);
+    // Apply vote display rules
+    const filteredEvent = EventService.filterEventResponse(event);
+    const category = filteredEvent.categories?.find((cat: any) => cat._id?.toString() === categoryId);
     if (!category) {
       throw new AppError("Category not found", 404);
     }
@@ -96,7 +100,7 @@ export class CategoryService {
 
     Object.assign(category, updateData);
     await event.save();
-    return EventService.filterEventResponse(event);
+    return EventService.filterEventResponse(event, userId, userRole);
   }
 
   static async deleteCategory(eventId: string, categoryId: string, userId: string, userRole: string) {

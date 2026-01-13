@@ -30,7 +30,7 @@ export class CandidateService {
     });
 
     await event.save();
-    return EventService.filterEventResponse(event);
+    return EventService.filterEventResponse(event, organizerId, undefined);
   }
 
   static async getCandidate(eventId: string, candidateCode: string, userId?: string, userRole?: string) {
@@ -54,8 +54,11 @@ export class CandidateService {
       }
     }
     
-    for (const category of event.categories || []) {
-      const candidate = category.candidates.find(cand => cand.code === candidateCode);
+    // Apply vote display rules
+    const filteredEvent = EventService.filterEventResponse(event);
+    
+    for (const category of filteredEvent.categories || []) {
+      const candidate = category.candidates.find((cand: any) => cand.code === candidateCode);
       if (candidate) {
         return candidate;
       }
@@ -89,7 +92,7 @@ export class CandidateService {
 
     Object.assign(candidate, updateData);
     await event.save();
-    return EventService.filterEventResponse(event);
+    return EventService.filterEventResponse(event, userId, userRole);
   }
 
   static async deleteCandidate(eventId: string, categoryId: string, candidateId: string, userId: string, userRole: string) {

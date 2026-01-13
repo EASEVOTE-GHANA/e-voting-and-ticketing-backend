@@ -138,6 +138,15 @@ export class PurchaseService {
       throw new AppError("Event not available for voting", 400);
     }
 
+    // Check voting time window
+    const now = new Date();
+    if (event.votingStartTime && now < event.votingStartTime) {
+      throw new AppError("Voting has not started yet", 400);
+    }
+    if (event.votingEndTime && now > event.votingEndTime) {
+      throw new AppError("Voting has ended", 400);
+    }
+
     if (!event.costPerVote) {
       throw new AppError("Voting not configured for this event", 400);
     }
