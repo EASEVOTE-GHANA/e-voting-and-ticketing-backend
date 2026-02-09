@@ -9,6 +9,7 @@ import purchaseRoutes from "./routes/purchase.routes";
 import ticketRoutes from "./routes/ticket.routes";
 import uploadRoutes from "./routes/upload.routes";
 import voteRoutes from "./routes/vote.routes";
+import nominationRoutes from "./routes/nomination.routes";
 import { globalErrorHandler } from "./middleware/error.middleware";
 import { CronService } from "./services/cron.service";
 
@@ -26,6 +27,7 @@ app.use("/api/purchases", purchaseRoutes);
 app.use("/api/tickets", ticketRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/votes", voteRoutes);
+app.use("/api/nominations", nominationRoutes);
 
 // Start cron jobs
 CronService.start();
