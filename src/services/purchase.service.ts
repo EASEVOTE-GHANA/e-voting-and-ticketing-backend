@@ -1,6 +1,6 @@
 import { Purchase } from "../models/Purchase.model";
 import { Event } from "../models/Event.model";
-import { Ticket } from "../models/Ticket.model";
+import { ITicket, Ticket } from "../models/Ticket.model";
 import { Settings } from "../models/Settings.model";
 import { PaystackService } from "./paystack.service";
 import { FlutterwaveService } from "./flutterwave.service";
@@ -10,6 +10,7 @@ import { PaginationHelper } from "../utils/pagination.util";
 import crypto from "crypto";
 import { IPurchase } from "../models/Purchase.model";
 import { IPaymentGateway } from "../payment-gateway.interface";
+import { HydratedDocument } from "mongoose";
 
 interface PaymentVerificationResult {
   success: boolean;
@@ -273,7 +274,8 @@ export class PurchaseService {
   }
 
   static async generateTickets(purchase: IPurchase) {
-    const tickets = [];
+    const tickets: HydratedDocument<ITicket>[] = [];
+
     
     for (let i = 0; i < purchase.ticketQuantity!; i++) {
       const ticketNumber = this.generateTicketNumber();
