@@ -1,3 +1,5 @@
+import "multer";
+
 declare global {
   namespace Express {
     interface Request {
@@ -7,17 +9,7 @@ declare global {
         status: string;
         tokenVersion: number;
       };
-      file?: {
-        fieldname: string;
-        originalname: string;
-        encoding: string;
-        mimetype: string;
-        size: number;
-        destination: string;
-        filename: string;
-        path: string;
-        buffer: Buffer;
-      };
+      
     }
   }
 }

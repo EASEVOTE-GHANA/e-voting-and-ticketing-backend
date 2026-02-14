@@ -132,13 +132,19 @@ export class EventService {
     console.log("OrganizerId in event:", event.organizerId);
     
     // Transform response to rename organizerId to organizer
-    const eventObj = populatedEvent?.toObject();
-    if (eventObj && eventObj.organizerId) {
-      eventObj.organizer = eventObj.organizerId;
-      delete eventObj.organizerId;
-    } else {
-      console.log("No organizerId found or population failed");
+    const raw = populatedEvent?.toObject();
+
+    const eventObj = raw
+      ? {
+          ...raw,
+          organizer: raw.organizerId,
+        }
+      : null;
+
+    if (eventObj) {
+      delete (eventObj as any).organizerId;
     }
+
     
     return eventObj;
   }
@@ -241,9 +247,14 @@ export class EventService {
     // Apply additional filters
     if (filters.type) dbQuery.type = filters.type;
     if (filters.status) dbQuery.status = filters.status;
-    if (filters.organizerId && ["ADMIN", "SUPER_ADMIN"].includes(userRole)) {
-      dbQuery.organizerId = filters.organizerId;
-    }
+    if (
+        filters.organizerId &&
+        userRole &&
+        ["ADMIN", "SUPER_ADMIN"].includes(userRole)
+      ) {
+        dbQuery.organizerId = filters.organizerId;
+      }
+
 
     const { page, limit, skip } = PaginationHelper.getParams(query || {});
     

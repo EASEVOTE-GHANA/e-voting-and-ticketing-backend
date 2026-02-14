@@ -147,7 +147,7 @@ const eventSchema = new Schema<IEvent>({
       },
       message: 'allowPublicNominations is only valid for VOTING events'
     }
-  },
+  } as any,
   votingStartTime: { type: Date },
   votingEndTime: { type: Date },
   liveResults: { type: Boolean, default: true },
