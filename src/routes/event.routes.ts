@@ -40,27 +40,27 @@ router.get("/:eventId/categories/:categoryId", optionalAuthenticate, getCategory
 router.get("/:eventId/candidates/:candidateCode", optionalAuthenticate, getCandidate);
 
 // Organizer routes
-router.get("/my/events", authenticate, requireRole("ORGANIZER"), getMyEvents);
-router.post("/", authenticate, requireRole("ORGANIZER", "ADMIN", "SUPER_ADMIN"), createEvent);
-router.put("/:id", authenticate, requireRole("ORGANIZER", "ADMIN", "SUPER_ADMIN"), updateEvent);
+router.get("/my/events", authenticate, requireRole("ORGANIZER", { allowPending: true }), getMyEvents);
+router.post("/", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), createEvent);
+router.put("/:id", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), updateEvent);
 router.patch("/:id/submit", authenticate, requireRole("ORGANIZER"), submitForReview);
 router.patch("/:id/publish", authenticate, requireRole("ORGANIZER"), publishEvent);
-router.post("/:id/categories", authenticate, requireRole("ORGANIZER"), addCategory);
-router.put("/:eventId/categories/:categoryId", authenticate, requireRole("ORGANIZER", "ADMIN", "SUPER_ADMIN"), updateCategory);
-router.delete("/:eventId/categories/:categoryId", authenticate, requireRole("ORGANIZER", "ADMIN", "SUPER_ADMIN"), deleteCategory);
-router.post("/:eventId/categories/:categoryId/candidates", authenticate, requireRole("ORGANIZER"), addCandidate);
-router.put("/:eventId/categories/:categoryId/candidates/:candidateId", authenticate, requireRole("ORGANIZER", "ADMIN", "SUPER_ADMIN"), updateCandidate);
-router.delete("/:eventId/categories/:categoryId/candidates/:candidateId", authenticate, requireRole("ORGANIZER", "ADMIN", "SUPER_ADMIN"), deleteCandidate);
-router.post("/:id/ticket-types", authenticate, requireRole("ORGANIZER"), addTicketType);
-router.put("/:eventId/ticket-types/:ticketTypeId", authenticate, requireRole("ORGANIZER", "ADMIN", "SUPER_ADMIN"), updateTicketType);
-router.delete("/:eventId/ticket-types/:ticketTypeId", authenticate, requireRole("ORGANIZER", "ADMIN", "SUPER_ADMIN"), deleteTicketType);
+router.post("/:id/categories", authenticate, requireRole("ORGANIZER", { allowPending: true }), addCategory);
+router.put("/:eventId/categories/:categoryId", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), updateCategory);
+router.delete("/:eventId/categories/:categoryId", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), deleteCategory);
+router.post("/:eventId/categories/:categoryId/candidates", authenticate, requireRole("ORGANIZER", { allowPending: true }), addCandidate);
+router.put("/:eventId/categories/:categoryId/candidates/:candidateId", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), updateCandidate);
+router.delete("/:eventId/categories/:categoryId/candidates/:candidateId", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), deleteCandidate);
+router.post("/:id/ticket-types", authenticate, requireRole("ORGANIZER", { allowPending: true }), addTicketType);
+router.put("/:eventId/ticket-types/:ticketTypeId", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), updateTicketType);
+router.delete("/:eventId/ticket-types/:ticketTypeId", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), deleteTicketType);
 router.delete("/:id", authenticate, deleteEvent);
-router.patch("/:id/toggle-live-results", authenticate, requireRole("ORGANIZER", "ADMIN", "SUPER_ADMIN"), toggleLiveResults);
-router.patch("/:id/toggle-vote-count", authenticate, requireRole("ORGANIZER", "ADMIN", "SUPER_ADMIN"), toggleShowVoteCount);
+router.patch("/:id/toggle-live-results", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"]), toggleLiveResults);
+router.patch("/:id/toggle-vote-count", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"]), toggleShowVoteCount);
 
 // Admin routes
-router.get("/admin/all", authenticate, requireRole("ADMIN", "SUPER_ADMIN"), getAllEventsForAdmin);
-router.get("/admin/deleted", authenticate, requireRole("ADMIN", "SUPER_ADMIN"), getDeletedEvents);
-router.patch("/:id/approve", authenticate, requireRole("ADMIN", "SUPER_ADMIN"), approveEvent);
+router.get("/admin/all", authenticate, requireRole(["ADMIN", "SUPER_ADMIN"]), getAllEventsForAdmin);
+router.get("/admin/deleted", authenticate, requireRole(["ADMIN", "SUPER_ADMIN"]), getDeletedEvents);
+router.patch("/:id/approve", authenticate, requireRole(["ADMIN", "SUPER_ADMIN"]), approveEvent);
 
 export default router;

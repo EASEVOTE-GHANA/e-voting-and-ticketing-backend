@@ -14,8 +14,8 @@ const router = Router();
 router.get("/purchase/:purchaseId", getTicketsByPurchase);
 
 // Organizer routes
-router.post("/scan", authenticate, requireRole("ORGANIZER", "ADMIN", "SUPER_ADMIN"), scanTicket);
-router.get("/events/:eventId", authenticate, requireRole("ORGANIZER", "ADMIN", "SUPER_ADMIN"), getEventTickets);
-router.get("/events/:eventId/stats", authenticate, requireRole("ORGANIZER", "ADMIN", "SUPER_ADMIN"), getTicketStats);
+router.post("/scan", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"]), scanTicket);
+router.get("/events/:eventId", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), getEventTickets);
+router.get("/events/:eventId/stats", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), getTicketStats);
 
 export default router;

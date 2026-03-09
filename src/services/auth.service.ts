@@ -37,7 +37,7 @@ export class AuthService {
     console.log("User created, generating verification token...");
     const verificationToken = await TokenService.createEmailVerificationToken(user._id.toString());
     console.log("Verification token created:", verificationToken);
-    
+
     console.log("Sending verification email to:", email);
     await EmailService.sendVerificationEmail(email, verificationToken);
     console.log("Verification email process completed");
@@ -47,7 +47,7 @@ export class AuthService {
 
   static async verifyEmail(token: string) {
     const tokenDoc = await TokenService.validateToken(token, "EMAIL_VERIFICATION");
-    
+
     const user = await User.findById(tokenDoc.userId);
     if (!user) {
       throw new AppError("User not found", 404);
@@ -55,7 +55,7 @@ export class AuthService {
 
     user.emailVerified = true;
     await user.save();
-    
+
     await TokenService.markTokenAsUsed(tokenDoc._id.toString());
 
     return { message: "Email verified successfully" };
@@ -65,8 +65,16 @@ export class AuthService {
     const { email, password } = credentials;
 
     const user = await User.findOne({ email });
-    if (!user || !user.emailVerified || user.status !== "ACTIVE") {
+    if (!user) {
       throw new AppError("Invalid credentials", 401);
+    }
+
+    if (!user.emailVerified) {
+      throw new AppError("Please verify your email to login", 401);
+    }
+
+    if (user.status === "DISABLED") {
+      throw new AppError("Your account has been disabled. Please contact support.", 403);
     }
 
     const match = await comparePassword(password, user.passwordHash);
@@ -81,7 +89,12 @@ export class AuthService {
     const userObj = user.toObject() as any;
     const { passwordHash, ...userWithoutPassword } = userObj;
 
-    return { ...tokens, user: userWithoutPassword };
+    let message = "Login successful";
+    if (user.status === "PENDING") {
+      message = "Your organizer account is pending admin approval.";
+    }
+
+    return { ...tokens, user: userWithoutPassword, message };
   }
 
   static async forgotPassword(email: string) {
@@ -102,7 +115,7 @@ export class AuthService {
     }
 
     const tokenDoc = await TokenService.validateToken(token, "PASSWORD_RESET");
-    
+
     const user = await User.findById(tokenDoc.userId);
     if (!user) {
       throw new AppError("User not found", 404);
@@ -110,7 +123,7 @@ export class AuthService {
 
     user.passwordHash = await hashPassword(newPassword);
     await user.save();
-    
+
     await TokenService.markTokenAsUsed(tokenDoc._id.toString());
 
     return { message: "Password reset successfully" };
