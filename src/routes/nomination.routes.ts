@@ -17,9 +17,9 @@ router.get("/events/:eventId/form", getNominationForm);
 router.post("/events/:eventId/submit", submitNomination);
 
 // Organizer routes
-router.post("/events/:eventId/form", authenticate, requireRole("ORGANIZER"), createNominationForm);
-router.get("/events/:eventId", authenticate, requireRole("ORGANIZER"), getNominations);
-router.patch("/:nominationId/approve", authenticate, requireRole("ORGANIZER"), approveNomination);
-router.patch("/:nominationId/reject", authenticate, requireRole("ORGANIZER"), rejectNomination);
+router.post("/events/:eventId/form", authenticate, requireRole("ORGANIZER", { allowPending: true }), createNominationForm);
+router.get("/events/:eventId", authenticate, requireRole("ORGANIZER", { allowPending: true }), getNominations);
+router.patch("/:nominationId/approve", authenticate, requireRole("ORGANIZER", { allowPending: true }), approveNomination);
+router.patch("/:nominationId/reject", authenticate, requireRole("ORGANIZER", { allowPending: true }), rejectNomination);
 
 export default router;

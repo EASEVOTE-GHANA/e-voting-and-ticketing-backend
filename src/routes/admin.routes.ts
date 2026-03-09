@@ -1,22 +1,27 @@
 import { Router } from "express";
 import { authenticate } from "../middleware/auth.middleware";
 import { requireRole } from "../middleware/role.middleware";
-import { createAdmin, approveOrganizer } from "../controllers/admin.controller";
+import { inviteAdmin, acceptInvitation, approveOrganizer } from "../controllers/admin.controller";
 import { updateSetting, getSetting, getAllSettings } from "../controllers/settings.controller";
 
 const router = Router();
 
 router.post(
-  "/create",
+  "/invite",
   authenticate,
   requireRole("SUPER_ADMIN"),
-  createAdmin
+  inviteAdmin
+);
+
+router.post(
+  "/accept-invitation",
+  acceptInvitation
 );
 
 router.patch(
   "/approve-organizer/:id",
   authenticate,
-  requireRole("ADMIN", "SUPER_ADMIN"),
+  requireRole(["ADMIN", "SUPER_ADMIN"]),
   approveOrganizer
 );
 

@@ -1,36 +1,60 @@
 import { User } from "../models/User.model";
 import { hashPassword, validatePassword } from "../utils/password";
 import { AppError } from "../middleware/error.middleware";
+import { EmailService } from "./email.service";
+import { TokenService } from "./token.service";
 
 export class AdminService {
-  static async createAdmin(adminData: {
+  static async inviteAdmin(adminData: {
     fullName: string;
     email: string;
-    password: string;
   }) {
-    const { fullName, email, password } = adminData;
-
-    if (!validatePassword(password)) {
-      throw new AppError("Weak password", 400);
-    }
+    const { fullName, email } = adminData;
 
     const exists = await User.findOne({ email });
     if (exists) {
       throw new AppError("Email already exists", 409);
     }
 
-    const passwordHash = await hashPassword(password);
-
-    await User.create({
+    // Create user with PENDING status and placeholder password
+    const user = await User.create({
       fullName,
       email,
-      passwordHash,
+      passwordHash: "INVITED_PENDING_PASSWORD", // Placeholder
       role: "ADMIN",
-      status: "ACTIVE",
+      status: "PENDING",
       emailVerified: true
     });
 
-    return { message: "Admin created successfully" };
+    const token = await TokenService.createAdminInvitationToken(user._id.toString());
+    await EmailService.sendAdminInvitationEmail(email, token);
+
+    return { message: "Invitation email sent successfully" };
+  }
+
+  static async acceptInvitation(token: string, password: string) {
+    if (!validatePassword(password)) {
+      throw new AppError("Weak password", 400);
+    }
+
+    const tokenDoc = await TokenService.validateToken(token, "ADMIN_INVITATION");
+
+    const user = await User.findById(tokenDoc.userId);
+    if (!user) {
+      throw new AppError("User not found", 404);
+    }
+
+    if (user.status !== "PENDING") {
+      throw new AppError("Invitation already accepted or account active", 400);
+    }
+
+    user.passwordHash = await hashPassword(password);
+    user.status = "ACTIVE";
+    await user.save();
+
+    await TokenService.markTokenAsUsed(tokenDoc._id.toString());
+
+    return { message: "Invitation accepted successfully. You can now login." };
   }
 
   static async approveOrganizer(id: string) {
