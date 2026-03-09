@@ -31,11 +31,24 @@ export class TokenService {
       type: "PASSWORD_RESET",
       expiresAt
     });
+    return token;
+  }
+
+  static async createAdminInvitationToken(userId: string) {
+    const token = this.generateToken();
+    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+
+    await Token.create({
+      userId,
+      token,
+      type: "ADMIN_INVITATION",
+      expiresAt
+    });
 
     return token;
   }
 
-  static async validateToken(token: string, type: "EMAIL_VERIFICATION" | "PASSWORD_RESET") {
+  static async validateToken(token: string, type: "EMAIL_VERIFICATION" | "PASSWORD_RESET" | "ADMIN_INVITATION") {
     const tokenDoc = await Token.findOne({
       token,
       type,

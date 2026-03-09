@@ -20,6 +20,6 @@ router.post("/webhook/payment", paymentWebhook);
 
 // Authenticated routes
 router.get("/history", authenticate, getPurchaseHistory);
-router.get("/events/:eventId", authenticate, requireRole("ORGANIZER", "ADMIN", "SUPER_ADMIN"), getEventPurchases);
+router.get("/events/:eventId", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), getEventPurchases);
 
 export default router;
