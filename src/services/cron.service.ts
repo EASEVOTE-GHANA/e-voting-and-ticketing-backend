@@ -29,17 +29,38 @@ export class CronService {
   static async updateEventStatuses() {
     const now = new Date();
 
-    // Start published events that have reached their start date
+    // 1. Move to NOMINATING if within nomination period (only if current status is PUBLISHED)
     await Event.updateMany(
       {
         status: 'PUBLISHED',
+        nominationStartDate: { $lte: now },
+        nominationEndDate: { $gt: now },
+        startDate: { $gt: now } // Haven't started voting yet
+      },
+      { status: 'NOMINATING' }
+    );
+
+    // 2. Revert to PUBLISHED if nomination ended but voting hasn't started yet
+    await Event.updateMany(
+      {
+        status: 'NOMINATING',
+        nominationEndDate: { $lte: now },
+        startDate: { $gt: now }
+      },
+      { status: 'PUBLISHED' }
+    );
+
+    // 3. Start events that have reached their start date (from PUBLISHED or NOMINATING)
+    await Event.updateMany(
+      {
+        status: { $in: ['PUBLISHED', 'NOMINATING'] },
         startDate: { $lte: now },
         endDate: { $gt: now }
       },
       { status: 'LIVE' }
     );
 
-    // End live events that have passed their end date
+    // 4. End live events that have passed their end date
     await Event.updateMany(
       {
         status: 'LIVE',
