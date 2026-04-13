@@ -32,7 +32,7 @@ export interface IEvent extends Document {
   title: string;
   description: string;
   type: "VOTING" | "TICKETING";
-  status: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "PUBLISHED" | "LIVE" | "PAUSED" | "ENDED" | "CANCELLED" | "ARCHIVED";
+  status: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "PUBLISHED" | "NOMINATING" | "LIVE" | "PAUSED" | "ENDED" | "CANCELLED" | "ARCHIVED";
   eventCode: string;
   imageUrl?: string;
   
@@ -108,7 +108,7 @@ const eventSchema = new Schema<IEvent>({
   type: { type: String, enum: ["VOTING", "TICKETING"], required: true },
   status: { 
     type: String, 
-    enum: ["DRAFT", "PENDING_REVIEW", "APPROVED", "PUBLISHED", "LIVE", "PAUSED", "ENDED", "CANCELLED", "ARCHIVED"],
+    enum: ["DRAFT", "PENDING_REVIEW", "APPROVED", "PUBLISHED", "NOMINATING", "LIVE", "PAUSED", "ENDED", "CANCELLED", "ARCHIVED"],
     default: "DRAFT"
   },
   eventCode: { type: String, required: true, unique: true },

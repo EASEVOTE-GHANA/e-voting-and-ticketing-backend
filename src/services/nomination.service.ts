@@ -46,6 +46,19 @@ export class NominationService {
       throw new AppError("Public nominations not enabled for this event", 400);
     }
 
+    if (event.status !== "NOMINATING") {
+      throw new AppError("Event is not currently taking nominations", 400);
+    }
+
+    // Enforce nomination dates
+    const now = new Date();
+    if (event.nominationStartDate && now < event.nominationStartDate) {
+      throw new AppError("Nominations have not started yet", 400);
+    }
+    if (event.nominationEndDate && now > event.nominationEndDate) {
+      throw new AppError("Nominations have ended", 400);
+    }
+
     const form = await NominationForm.findOne({ eventId });
     if (!form) {
       throw new AppError("Nomination form not found", 404);
@@ -67,6 +80,19 @@ export class NominationService {
 
     if (!event.allowPublicNominations) {
       throw new AppError("Public nominations not enabled for this event", 400);
+    }
+
+    if (event.status !== "NOMINATING") {
+      throw new AppError("Event is not currently taking nominations", 400);
+    }
+
+    // Enforce nomination dates
+    const now = new Date();
+    if (event.nominationStartDate && now < event.nominationStartDate) {
+      throw new AppError("Nominations have not started yet", 400);
+    }
+    if (event.nominationEndDate && now > event.nominationEndDate) {
+      throw new AppError("Nominations have ended", 400);
     }
 
     const category = event.categories?.find(cat => cat._id?.toString() === nominationData.categoryId);
