@@ -70,7 +70,9 @@ export class AuthService {
     }
 
     if (!user.emailVerified) {
-      throw new AppError("Please verify your email to login", 401);
+      const verificationToken = await TokenService.createEmailVerificationToken(user._id.toString());
+      await EmailService.sendVerificationEmail(user.email, verificationToken);
+      throw new AppError("Please verify your email to login. A new verification link has been sent to your email.", 401);
     }
 
     if (user.status === "DISABLED") {
