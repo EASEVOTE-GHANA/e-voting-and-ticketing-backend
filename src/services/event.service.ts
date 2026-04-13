@@ -211,7 +211,7 @@ export class EventService {
     }
 
     // Check if event is publicly accessible
-    const isPubliclyAccessible = ["PUBLISHED", "LIVE"].includes(event.status) && event.isPublic;
+    const isPubliclyAccessible = ["LIVE", "ENDED"].includes(event.status) && event.isPublic;
     
     if (!isPubliclyAccessible) {
       // Require authentication for non-public events
@@ -239,7 +239,7 @@ export class EventService {
     if (userRole === "ORGANIZER") {
       dbQuery.organizerId = userId;
     } else if (!userRole || userRole === "PUBLIC") {
-      dbQuery.status = { $in: ["PUBLISHED", "LIVE"] };
+      dbQuery.status = { $in: ["LIVE", "ENDED"] };
       dbQuery.isPublic = true;
     }
     // Admin and Super Admin can see all events (no additional filters)
