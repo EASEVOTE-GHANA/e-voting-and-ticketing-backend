@@ -18,7 +18,9 @@ export const upsertFaq = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const deleteFaq = asyncHandler(async (req: Request, res: Response) => {
-  await FaqService.deleteFaq(req.params.id);
+  const { id } = req.params;
+  const faqId = Array.isArray(id) ? id[0] : id;
+  await FaqService.deleteFaq(faqId);
   res.json({ message: "FAQ deleted successfully" });
 });
 

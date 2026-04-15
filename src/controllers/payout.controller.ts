@@ -27,7 +27,8 @@ export const adminGetAllPayouts = asyncHandler(async (req: Request, res: Respons
 
 export const adminUpdatePayoutStatus = asyncHandler(async (req: Request, res: Response) => {
   const adminId = (req as any).user.id;
-  const payoutId = req.params.id;
+  const { id } = req.params;
+  const payoutId = Array.isArray(id) ? id[0] : id;
   const { status, adminNotes } = req.body;
   
   const payout = await PayoutService.updatePayoutStatus(payoutId, status, adminNotes, adminId);

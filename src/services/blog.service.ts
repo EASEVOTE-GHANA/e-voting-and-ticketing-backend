@@ -13,7 +13,7 @@ const slugify = (text: string) => {
 
 export class BlogService {
   static async createBlog(data: any) {
-    const slug = slugify(data.title, { lower: true, strict: true });
+    const slug = slugify(data.title);
     
     // Check for slug uniqueness
     const existing = await Blog.findOne({ slug });
@@ -28,7 +28,7 @@ export class BlogService {
 
   static async updateBlog(id: string, data: any) {
     if (data.title) {
-        data.slug = slugify(data.title, { lower: true, strict: true });
+        data.slug = slugify(data.title);
     }
     
     const blog = await Blog.findByIdAndUpdate(id, data, { new: true });
