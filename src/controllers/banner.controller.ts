@@ -19,12 +19,14 @@ export const createBanner = asyncHandler(async (req: Request, res: Response) => 
 
 export const updateBanner = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const banner = await BannerService.updateBanner(id, req.body);
+  const bannerId = Array.isArray(id) ? id[0] : id;
+  const banner = await BannerService.updateBanner(bannerId, req.body);
   res.json(banner);
 });
 
 export const deleteBanner = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
-  await BannerService.deleteBanner(id);
+  const bannerId = Array.isArray(id) ? id[0] : id;
+  await BannerService.deleteBanner(bannerId);
   res.json({ message: "Banner deleted successfully" });
 });
