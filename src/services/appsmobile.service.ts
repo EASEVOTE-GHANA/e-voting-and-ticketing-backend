@@ -47,12 +47,17 @@ export class AppsMobileService implements IPaymentGateway {
         }
       );
 
+      console.log(`[AppsMobileService] Payment initialized successfully. Reference: ${data.reference}, Auth URL: ${response.data.redirect_url}`);
       return {
         authorization_url: response.data.redirect_url,
         reference: data.reference,
       };
     } catch (error: any) {
-      console.error("Apps&Mobile initialization error:", error.response?.data);
+      console.error("[AppsMobileService] Initialization error:", {
+        message: error.message,
+        response: error.response?.data,
+        reference: data.reference
+      });
       throw new AppError("Payment initialization failed", 500);
     }
   }
@@ -82,6 +87,7 @@ export class AppsMobileService implements IPaymentGateway {
       const isSuccess = data.trans_status?.startsWith('000');
       
       return {
+        success: isSuccess,
         status: isSuccess ? "success" : "failed",
         amount: 0, // Amount not returned in verification
         currency: "GHS",
@@ -103,7 +109,8 @@ export class AppsMobileService implements IPaymentGateway {
       return {
         isValid: true,
         reference: data.trans_ref,
-        status: isSuccess ? "success" : "failed"
+        status: isSuccess ? "success" : "failed",
+        amount: parseFloat(data.trans_amount || data.amount || "0")
       };
     }
 
@@ -161,17 +168,18 @@ export class AppsMobileService implements IPaymentGateway {
 
       const isSuccess = response.data.resp_code === "015";
       
+      console.log(`[AppsMobileService] USSD Payment initialized. Success: ${isSuccess}, Reference: ${data.reference}, Message: ${response.data.resp_desc}`);
       return {
         success: isSuccess,
         reference: data.reference,
         message: response.data.resp_desc || "Payment initiated"
       };
     } catch (error: any) {
-      console.error("AppsMobile USSD payment error:", {
+      console.error("[AppsMobileService] USSD initialization error:", {
         message: error.message,
         response: error.response?.data,
         status: error.response?.status,
-        config: error.config
+        reference: data.reference
       });
       throw new AppError(`USSD payment initiation failed: ${error.message}`, 500);
     }

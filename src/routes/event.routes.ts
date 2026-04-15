@@ -27,7 +27,8 @@ import {
   updateTicketType,
   deleteTicketType,
   toggleLiveResults,
-  toggleShowVoteCount
+  toggleShowVoteCount,
+  restoreEvent
 } from "../controllers/event.controller";
 
 const router = Router();
@@ -60,7 +61,8 @@ router.patch("/:id/toggle-vote-count", authenticate, requireRole(["ORGANIZER", "
 
 // Admin routes
 router.get("/admin/all", authenticate, requireRole(["ADMIN", "SUPER_ADMIN"]), getAllEventsForAdmin);
-router.get("/admin/deleted", authenticate, requireRole(["ADMIN", "SUPER_ADMIN"]), getDeletedEvents);
+router.get("/admin/deleted", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"]), getDeletedEvents);
+router.post("/:id/restore", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"]), restoreEvent);
 router.patch("/:id/approve", authenticate, requireRole(["ADMIN", "SUPER_ADMIN"]), approveEvent);
 
 export default router;

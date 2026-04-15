@@ -32,12 +32,17 @@ export class FlutterwaveService implements IPaymentGateway {
         }
       );
 
+      console.log(`[FlutterwaveService] Payment initialized successfully. Reference: ${data.reference}, Auth URL: ${response.data.data.link}`);
       return {
         authorization_url: response.data.data.link,
         reference: data.reference,
       };
     } catch (error: any) {
-      console.error("Flutterwave initialization error:", error.response?.data);
+      console.error("[FlutterwaveService] Initialization error:", {
+        message: error.message,
+        response: error.response?.data,
+        reference: data.reference
+      });
       throw new AppError("Payment initialization failed", 500);
     }
   }
@@ -54,8 +59,10 @@ export class FlutterwaveService implements IPaymentGateway {
       );
 
       const data = response.data.data;
+      const isSuccess = data.status === "successful";
       return {
-        status: data.status === "successful" ? "success" : "failed",
+        success: isSuccess,
+        status: isSuccess ? "success" : "failed",
         amount: data.amount,
         currency: data.currency,
         reference: data.tx_ref,
@@ -80,7 +87,8 @@ export class FlutterwaveService implements IPaymentGateway {
       return {
         isValid: true,
         reference: payload.data.tx_ref,
-        status: "success"
+        status: "success",
+        amount: payload.data.amount
       };
     }
 
@@ -88,7 +96,8 @@ export class FlutterwaveService implements IPaymentGateway {
       return {
         isValid: true,
         reference: payload.data.tx_ref,
-        status: "failed"
+        status: "failed",
+        amount: payload.data.amount
       };
     }
 

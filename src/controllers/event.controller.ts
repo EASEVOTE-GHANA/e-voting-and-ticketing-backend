@@ -33,8 +33,18 @@ export const getMyEvents = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const getAllEventsForAdmin = asyncHandler(async (req: Request, res: Response) => {
-  const events = await EventService.getAllEventsForAdmin(req.query);
+  const events = await EventService.getAllEventsForAdmin(req.query, req.query);
   res.json(events);
+});
+
+export const restoreEvent = asyncHandler(async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const event = await EventService.restoreEvent(id, req.user!.id, req.user!.role);
+  res.json({
+    success: true,
+    message: "Event restored successfully",
+    event
+  });
 });
 
 export const submitForReview = asyncHandler(async (req: Request, res: Response) => {
@@ -116,7 +126,7 @@ export const updateCandidate = asyncHandler(async (req: Request, res: Response) 
 });
 
 export const getDeletedEvents = asyncHandler(async (req: Request, res: Response) => {
-  const events = await EventService.getDeletedEvents(req.user!.role);
+  const events = await EventService.getDeletedEvents(req.user!.role, req.user!.id);
   res.json(events);
 });
 

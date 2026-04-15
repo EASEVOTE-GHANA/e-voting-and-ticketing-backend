@@ -28,16 +28,21 @@ export interface USSDPaymentInitializationResult {
 }
 
 export interface PaymentVerificationResult {
-  status: 'success' | 'failed';
+  success: boolean;
+  status?: string;
   amount: number;
   currency: string;
   reference: string;
+  metadata?: any;
+  gatewayData?: any;
 }
 
 export interface WebhookResult {
   isValid: boolean;
   reference?: string;
   status?: string;
+  amount?: number;
+  metadata?: any;
 }
 
 export interface IPaymentGateway {

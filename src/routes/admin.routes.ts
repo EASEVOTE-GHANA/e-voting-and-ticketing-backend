@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { authenticate } from "../middleware/auth.middleware";
 import { requireRole } from "../middleware/role.middleware";
-import { inviteAdmin, acceptInvitation, approveOrganizer } from "../controllers/admin.controller";
+import { inviteAdmin, acceptInvitation, approveOrganizer, getTransactionStats, getAllTransactions } from "../controllers/admin.controller";
 import { updateSetting, getSetting, getAllSettings } from "../controllers/settings.controller";
 
 const router = Router();
@@ -23,6 +23,20 @@ router.patch(
   authenticate,
   requireRole(["ADMIN", "SUPER_ADMIN"]),
   approveOrganizer
+);
+
+router.get(
+  "/stats/transactions",
+  authenticate,
+  requireRole(["ADMIN", "SUPER_ADMIN"]),
+  getTransactionStats
+);
+
+router.get(
+  "/transactions",
+  authenticate,
+  requireRole(["ADMIN", "SUPER_ADMIN"]),
+  getAllTransactions
 );
 
 // Settings routes - Super Admin only
