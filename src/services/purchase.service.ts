@@ -7,6 +7,7 @@ import { FlutterwaveService } from "./flutterwave.service";
 import { AppsMobileService } from "./appsmobile.service";
 import { AppError } from "../middleware/error.middleware";
 import { PaginationHelper } from "../utils/pagination.util";
+import { GatewayService } from "./gateway.service";
 import crypto from "crypto";
 import { IPurchase } from "../models/Purchase.model";
 import { IPaymentGateway, PaymentVerificationResult } from "../payment-gateway.interface";
@@ -16,8 +17,7 @@ type PaymentGateway = 'paystack' | 'flutterwave' | 'appsmobile';
 
 export class PurchaseService {
   private static async getDefaultGateway(): Promise<PaymentGateway> {
-    const setting = await Settings.findOne({ key: "payment_gateway" });
-    return (setting?.value as PaymentGateway) || 'paystack';
+    return await GatewayService.getPrimaryProvider("WEB");
   }
 
   private static getGatewayService(gateway: PaymentGateway): IPaymentGateway {
@@ -668,8 +668,7 @@ export class PurchaseService {
   }
 
   private static async getUSSDPaymentGateway(): Promise<PaymentGateway> {
-    const setting = await Settings.findOne({ key: "ussd_payment_gateway" });
-    return (setting?.value as PaymentGateway) || 'appsmobile';
+    return await GatewayService.getPrimaryProvider("USSD");
   }
 
   static async getAllTransactions(query: any) {
@@ -691,37 +690,126 @@ export class PurchaseService {
     return PaginationHelper.formatResponse(purchases, total, page, limit);
   }
 
-  static async getTransactionStats() {
-    // Total Volume & Success Rate aggregation
-    const stats = await Purchase.aggregate([
+  static async getRevenueStats() {
+    const last30Days = new Date();
+    last30Days.setDate(last30Days.getDate() - 30);
+
+    // 1. Overall Aggregates
+    const overallStats = await Purchase.aggregate([
+      {
+        $match: { status: "PAID" }
+      },
       {
         $facet: {
-          totals: [
-            { $group: { _id: null, count: { $sum: 1 }, totalVolume: { $sum: { $cond: [{ $eq: ["$status", "PAID"] }, "$amount", 0] } }, paidCount: { $sum: { $cond: [{ $eq: ["$status", "PAID"] }, 1, 0] } } } }
+          totalRevenue: [
+            { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } }
           ],
-          pending: [
-            { $match: { status: "PENDING" } },
-            { $count: "count" }
+          byType: [
+            { $group: { _id: "$type", value: { $sum: "$amount" } } },
+            { $project: { name: "$_id", value: 1, _id: 0 } }
+          ],
+          topEvents: [
+            { $group: { _id: "$eventId", revenue: { $sum: "$amount" }, count: { $sum: 1 } } },
+            { $sort: { revenue: -1 } },
+            { $limit: 5 },
+            {
+              $lookup: {
+                from: "events",
+                localField: "_id",
+                foreignField: "_id",
+                as: "event"
+              }
+            },
+            { $unwind: "$event" },
+            {
+              $project: {
+                title: "$event.title",
+                type: "$event.type",
+                revenue: 1,
+                count: 1
+              }
+            }
+          ],
+          trend: [
+            {
+              $match: {
+                createdAt: { $gte: last30Days }
+              }
+            },
+            {
+              $group: {
+                _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                revenue: { $sum: "$amount" }
+              }
+            },
+            { $sort: { _id: 1 } },
+            { $project: { date: "$_id", revenue: 1, _id: 0 } }
           ]
         }
       }
     ]);
 
-    const result = stats[0].totals[0] || { count: 0, totalVolume: 0, paidCount: 0 };
-    const pendingCount = stats[0].pending[0]?.count || 0;
-    
-    // Commission calculation (default 10% if no setting found)
+    const result = overallStats[0];
+    const totals = result.totalRevenue[0] || { total: 0, count: 0 };
+
+    // 2. Platform Commission Calculation
     const commissionSetting = await Settings.findOne({ key: "platform_commission" });
     const commissionRate = commissionSetting ? parseFloat(commissionSetting.value) : 10;
-    const netRevenue = result.totalVolume * (commissionRate / 100);
-
-    const successRate = result.count > 0 ? (result.paidCount / result.count) * 100 : 0;
+    
+    // 3. Top Organizers
+    const topOrganizersStats = await Purchase.aggregate([
+      { $match: { status: "PAID" } },
+      {
+        $lookup: {
+          from: "events",
+          localField: "eventId",
+          foreignField: "_id",
+          as: "event"
+        }
+      },
+      { $unwind: "$event" },
+      {
+        $group: {
+          _id: "$event.organizerId",
+          revenue: { $sum: "$amount" },
+          eventCount: { $addToSet: "$eventId" }
+        }
+      },
+      { $project: { _id: 1, revenue: 1, eventCount: { $size: "$eventCount" } } },
+      { $sort: { revenue: -1 } },
+      { $limit: 5 },
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "organizer"
+        }
+      },
+      { $unwind: "$organizer" },
+      {
+        $project: {
+          name: "$organizer.fullName",
+          businessName: "$organizer.businessName",
+          email: "$organizer.email",
+          revenue: 1,
+          eventCount: 1
+        }
+      }
+    ]);
 
     return {
-      totalVolume: result.totalVolume,
-      netRevenue,
-      successRate,
-      pendingCount
+      totalRevenue: totals.total,
+      totalTransactions: totals.count,
+      netCommission: totals.total * (commissionRate / 100),
+      organizerEarnings: totals.total * (1 - commissionRate / 100),
+      byType: result.byType.map((t: any) => ({
+        ...t,
+        name: t.name === "VOTE" ? "Voting" : "Ticketing"
+      })),
+      trend: result.trend,
+      topEvents: result.topEvents,
+      topOrganizers: topOrganizersStats
     };
   }
 }
