@@ -61,4 +61,13 @@ export class EmailService {
       `
     });
   }
+
+  static async sendCustomEmail(options: { to: string; subject: string; html: string }) {
+    await resend.emails.send({
+      from: process.env.FROM_EMAIL || "noreply@easevote.com",
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+    });
+  }
 }

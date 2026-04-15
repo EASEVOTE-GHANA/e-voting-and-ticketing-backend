@@ -3,6 +3,7 @@ import { authenticate } from "../middleware/auth.middleware";
 import { requireRole } from "../middleware/role.middleware";
 import { inviteAdmin, acceptInvitation, approveOrganizer, getRevenueStats, getAllTransactions, getGateways, setPrimaryGateway, resetGatewayHealth, getPlatformStats, getUsersStats, getSystemLogs, exportTransactions, exportPayouts, exportOrganizers, exportEvents, exportNominations } from "../controllers/admin.controller";
 import { updateSetting, getSetting, getAllSettings } from "../controllers/settings.controller";
+import { sendManualNotification, getNotificationLogs } from "../controllers/notification.controller";
 
 const router = Router();
 
@@ -138,6 +139,21 @@ router.post(
   authenticate,
   requireRole("SUPER_ADMIN"),
   resetGatewayHealth
+);
+
+// Notifications
+router.post(
+  "/notifications/send",
+  authenticate,
+  requireRole(["ADMIN", "SUPER_ADMIN"]),
+  sendManualNotification
+);
+
+router.get(
+  "/notifications/logs",
+  authenticate,
+  requireRole(["ADMIN", "SUPER_ADMIN"]),
+  getNotificationLogs
 );
 
 export default router;
