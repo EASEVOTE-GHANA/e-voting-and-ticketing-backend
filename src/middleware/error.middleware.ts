@@ -21,6 +21,13 @@ export const globalErrorHandler = (
   err.statusCode = err.statusCode || 500;
   err.message = err.message || "Internal Server Error";
 
+  console.error(`[GlobalErrorHandler] Error ${err.statusCode}: ${err.message}`, {
+    path: req.path,
+    method: req.method,
+    body: req.body,
+    stack: err.stack
+  });
+
   res.status(err.statusCode).json({
     message: err.message,
     ...(process.env.NODE_ENV === "development" && { stack: err.stack })

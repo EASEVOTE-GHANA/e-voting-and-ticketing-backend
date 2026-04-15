@@ -7,25 +7,17 @@ import { FlutterwaveService } from "./flutterwave.service";
 import { AppsMobileService } from "./appsmobile.service";
 import { AppError } from "../middleware/error.middleware";
 import { PaginationHelper } from "../utils/pagination.util";
+import { GatewayService } from "./gateway.service";
 import crypto from "crypto";
 import { IPurchase } from "../models/Purchase.model";
-import { IPaymentGateway } from "../payment-gateway.interface";
+import { IPaymentGateway, PaymentVerificationResult } from "../payment-gateway.interface";
 import { HydratedDocument } from "mongoose";
-
-interface PaymentVerificationResult {
-  success: boolean;
-  amount?: number;
-  currency?: string;
-  reference?: string;
-  gatewayData?: any;
-}
 
 type PaymentGateway = 'paystack' | 'flutterwave' | 'appsmobile';
 
 export class PurchaseService {
   private static async getDefaultGateway(): Promise<PaymentGateway> {
-    const setting = await Settings.findOne({ key: "payment_gateway" });
-    return (setting?.value as PaymentGateway) || 'paystack';
+    return await GatewayService.getPrimaryProvider("WEB");
   }
 
   private static getGatewayService(gateway: PaymentGateway): IPaymentGateway {
@@ -48,15 +40,8 @@ export class PurchaseService {
     return `TK${Date.now()}${crypto.randomBytes(2).toString("hex").toUpperCase()}`;
   }
 
-  static async initializeTicketPurchase(data: {
-    eventId: string;
-    ticketTypeId: string;
-    quantity: number;
-    customerEmail: string;
-    customerName?: string;
-    customerPhone?: string;
-    userId?: string;
-  }) {
+  static async initializeTicketPurchase(data: any) {
+    console.log(`[PurchaseService] initializeTicketPurchase called with:`, JSON.stringify(data, null, 2));
     const event = await Event.findById(data.eventId);
     if (!event) {
       throw new AppError("Event not found", 404);
@@ -105,6 +90,8 @@ export class PurchaseService {
     const gateway = await this.getDefaultGateway();
     const gatewayService = this.getGatewayService(gateway);
     
+    console.log(`[PurchaseService] Initializing ticket purchase for ${data.customerEmail}. Event: ${data.eventId}, Amount: ${amount}, Reference: ${reference}, Gateway: ${gateway}`);
+    
     const paymentData = await gatewayService.initializePayment({
       email: data.customerEmail,
       amount,
@@ -113,7 +100,13 @@ export class PurchaseService {
       metadata: {
         purchaseId: purchase._id,
         eventId: data.eventId,
-        type: "TICKET"
+        type: "TICKET",
+        ticketTypeId: data.ticketTypeId,
+        quantity: data.quantity,
+        customerEmail: data.customerEmail,
+        customerName: data.customerName,
+        customerPhone: data.customerPhone,
+        userId: data.userId
       }
     });
 
@@ -124,16 +117,8 @@ export class PurchaseService {
     };
   }
 
-  static async initializeVotePurchase(data: {
-    eventId: string;
-    candidateId: string;
-    categoryId: string;
-    voteCount: number;
-    customerEmail: string;
-    customerName?: string;
-    customerPhone?: string;
-    userId?: string;
-  }) {
+  static async initializeVotePurchase(data: any) {
+    console.log(`[PurchaseService] initializeVotePurchase called with:`, JSON.stringify(data, null, 2));
     const event = await Event.findById(data.eventId);
     if (!event) {
       throw new AppError("Event not found", 404);
@@ -200,6 +185,8 @@ export class PurchaseService {
     const gateway = await this.getDefaultGateway();
     const gatewayService = this.getGatewayService(gateway);
     
+    console.log(`[PurchaseService] Initializing vote purchase for ${data.customerEmail}. Event: ${data.eventId}, Amount: ${amount}, Reference: ${reference}, Gateway: ${gateway}`);
+    
     const paymentData = await gatewayService.initializePayment({
       email: data.customerEmail,
       amount,
@@ -208,7 +195,14 @@ export class PurchaseService {
       metadata: {
         purchaseId: purchase._id,
         eventId: data.eventId,
-        type: "VOTE"
+        type: "VOTE",
+        candidateId: data.candidateId,
+        categoryId: data.categoryId,
+        voteCount: data.voteCount,
+        customerEmail: data.customerEmail,
+        customerName: data.customerName,
+        customerPhone: data.customerPhone,
+        userId: data.userId
       }
     });
 
@@ -220,16 +214,14 @@ export class PurchaseService {
   }
 
   static async verifyPayment(reference: string) {
-    const purchase = await Purchase.findOne({ paymentReference: reference });
-    if (!purchase) {
-      throw new AppError("Purchase not found", 404);
-    }
+    const paymentData = await this.verifyWithGateway(reference);
+    
+    // Reconcile/Find the purchase record using metadata if necessary
+    const purchase = await this.reconcilePurchase(reference, paymentData.metadata, paymentData.amount || 0);
 
     if (purchase.status === "PAID") {
       return { purchase, message: "Payment already verified" };
     }
-
-    const paymentData = await this.verifyWithGateway(reference);
     
     if (!paymentData.success) {
       purchase.status = "FAILED";
@@ -263,14 +255,53 @@ export class PurchaseService {
     
     const result = await gatewayService.verifyPayment(reference);
     
-    // Normalize response to standard format
     return {
-      success: result.status === 'success',
+      success: result.success,
+      status: result.status,
       amount: result.amount,
       currency: result.currency,
       reference: result.reference,
+      metadata: result.metadata,
       gatewayData: result
     };
+  }
+
+  static async reconcilePurchase(reference: string, metadata: any, amount: number): Promise<HydratedDocument<IPurchase>> {
+    let purchase = await Purchase.findOne({ paymentReference: reference });
+    
+    if (purchase) {
+      return purchase;
+    }
+
+    if (!metadata) {
+      throw new AppError("Purchase not found and no metadata available for reconstruction", 404);
+    }
+
+    console.log(`[PurchaseService] Reconstructing missing purchase from metadata for reference: ${reference}`);
+
+    const purchaseData: any = {
+      paymentReference: reference,
+      amount: amount,
+      status: "PENDING",
+      type: metadata.type,
+      eventId: metadata.eventId,
+      userId: metadata.userId,
+      customerEmail: metadata.customerEmail,
+      customerName: metadata.customerName,
+      customerPhone: metadata.customerPhone,
+      expiresAt: new Date(Date.now() + 30 * 60 * 1000) // Default expiry if reconstructed
+    };
+
+    if (metadata.type === "TICKET") {
+      purchaseData.ticketTypeId = metadata.ticketTypeId;
+      purchaseData.ticketQuantity = metadata.quantity;
+    } else if (metadata.type === "VOTE") {
+      purchaseData.candidateId = metadata.candidateId;
+      purchaseData.categoryId = metadata.categoryId;
+      purchaseData.voteCount = metadata.voteCount;
+    }
+
+    return await Purchase.create(purchaseData);
   }
 
   static async generateTickets(purchase: IPurchase) {
@@ -382,7 +413,30 @@ export class PurchaseService {
     if (webhookResult.reference) {
       if (webhookResult.status === 'success') {
         console.log('Processing successful payment for reference:', webhookResult.reference);
-        await this.processSuccessfulPayment(webhookResult.reference);
+        
+        // Reconcile/Find the purchase record using metadata if available
+        const purchase = await this.reconcilePurchase(
+          webhookResult.reference, 
+          webhookResult.metadata, 
+          webhookResult.amount || 0
+        );
+        
+        if (purchase.status !== "PAID") {
+          purchase.status = "PAID";
+          purchase.paidAt = new Date();
+          // Update amount if it was 0 (reconstructed) but the webhook has the real value
+          if (purchase.amount === 0 && webhookResult.amount) {
+            purchase.amount = webhookResult.amount;
+          }
+          await purchase.save();
+
+          if (purchase.type === "TICKET") {
+            await this.generateTickets(purchase);
+            await this.moveReservedToSold(purchase);
+          } else if (purchase.type === "VOTE") {
+            await this.addVotes(purchase);
+          }
+        }
       } else {
         console.log('Processing failed payment for reference:', webhookResult.reference);
         await this.processFailedPayment(webhookResult.reference);
@@ -502,6 +556,7 @@ export class PurchaseService {
       throw new AppError("Selected gateway does not support USSD payments", 400);
     }
 
+    console.log(`[PurchaseService] Initializing ticket purchase (USSD) for ${data.customerPhone}. Event: ${data.eventId}, Amount: ${amount}, Reference: ${reference}, Gateway: ${gateway}`);
     
     const paymentData = await gatewayService.initializeUSSDPayment({
       email: `${data.customerPhone}@ussd.easevote.com`,
@@ -588,6 +643,7 @@ export class PurchaseService {
       throw new AppError("Selected gateway does not support USSD payments", 400);
     }
 
+    console.log(`[PurchaseService] Initializing vote purchase (USSD) for ${data.customerPhone}. Event: ${data.eventId}, Amount: ${amount}, Reference: ${reference}, Gateway: ${gateway}`);
     
     const paymentData = await gatewayService.initializeUSSDPayment({
       email: `${data.customerPhone}@ussd.easevote.com`,
@@ -612,7 +668,148 @@ export class PurchaseService {
   }
 
   private static async getUSSDPaymentGateway(): Promise<PaymentGateway> {
-    const setting = await Settings.findOne({ key: "ussd_payment_gateway" });
-    return (setting?.value as PaymentGateway) || 'appsmobile';
+    return await GatewayService.getPrimaryProvider("USSD");
+  }
+
+  static async getAllTransactions(query: any) {
+    const { page, limit, skip } = PaginationHelper.getParams(query);
+    
+    // Sort by createdAt desc by default
+    const sort = { createdAt: -1 };
+
+    const [purchases, total] = await Promise.all([
+      Purchase.find()
+        .populate("eventId", "title type")
+        .populate("userId", "fullName email")
+        .sort(sort as any)
+        .skip(skip)
+        .limit(limit),
+      Purchase.countDocuments()
+    ]);
+
+    return PaginationHelper.formatResponse(purchases, total, page, limit);
+  }
+
+  static async getRevenueStats() {
+    const last30Days = new Date();
+    last30Days.setDate(last30Days.getDate() - 30);
+
+    // 1. Overall Aggregates
+    const overallStats = await Purchase.aggregate([
+      {
+        $match: { status: "PAID" }
+      },
+      {
+        $facet: {
+          totalRevenue: [
+            { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } }
+          ],
+          byType: [
+            { $group: { _id: "$type", value: { $sum: "$amount" } } },
+            { $project: { name: "$_id", value: 1, _id: 0 } }
+          ],
+          topEvents: [
+            { $group: { _id: "$eventId", revenue: { $sum: "$amount" }, count: { $sum: 1 } } },
+            { $sort: { revenue: -1 } },
+            { $limit: 5 },
+            {
+              $lookup: {
+                from: "events",
+                localField: "_id",
+                foreignField: "_id",
+                as: "event"
+              }
+            },
+            { $unwind: "$event" },
+            {
+              $project: {
+                title: "$event.title",
+                type: "$event.type",
+                revenue: 1,
+                count: 1
+              }
+            }
+          ],
+          trend: [
+            {
+              $match: {
+                createdAt: { $gte: last30Days }
+              }
+            },
+            {
+              $group: {
+                _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                revenue: { $sum: "$amount" }
+              }
+            },
+            { $sort: { _id: 1 } },
+            { $project: { date: "$_id", revenue: 1, _id: 0 } }
+          ]
+        }
+      }
+    ]);
+
+    const result = overallStats[0];
+    const totals = result.totalRevenue[0] || { total: 0, count: 0 };
+
+    // 2. Platform Commission Calculation
+    const commissionSetting = await Settings.findOne({ key: "platform_commission" });
+    const commissionRate = commissionSetting ? parseFloat(commissionSetting.value) : 10;
+    
+    // 3. Top Organizers
+    const topOrganizersStats = await Purchase.aggregate([
+      { $match: { status: "PAID" } },
+      {
+        $lookup: {
+          from: "events",
+          localField: "eventId",
+          foreignField: "_id",
+          as: "event"
+        }
+      },
+      { $unwind: "$event" },
+      {
+        $group: {
+          _id: "$event.organizerId",
+          revenue: { $sum: "$amount" },
+          eventCount: { $addToSet: "$eventId" }
+        }
+      },
+      { $project: { _id: 1, revenue: 1, eventCount: { $size: "$eventCount" } } },
+      { $sort: { revenue: -1 } },
+      { $limit: 5 },
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "organizer"
+        }
+      },
+      { $unwind: "$organizer" },
+      {
+        $project: {
+          name: "$organizer.fullName",
+          businessName: "$organizer.businessName",
+          email: "$organizer.email",
+          revenue: 1,
+          eventCount: 1
+        }
+      }
+    ]);
+
+    return {
+      totalRevenue: totals.total,
+      totalTransactions: totals.count,
+      netCommission: totals.total * (commissionRate / 100),
+      organizerEarnings: totals.total * (1 - commissionRate / 100),
+      byType: result.byType.map((t: any) => ({
+        ...t,
+        name: t.name === "VOTE" ? "Voting" : "Ticketing"
+      })),
+      trend: result.trend,
+      topEvents: result.topEvents,
+      topOrganizers: topOrganizersStats
+    };
   }
 }

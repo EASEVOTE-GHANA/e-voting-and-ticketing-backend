@@ -14,6 +14,8 @@ export interface IUser extends Document {
   emailVerified: boolean;
   lastLoginAt?: Date;
   tokenVersion: number;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const UserSchema = new Schema<IUser>({

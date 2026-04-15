@@ -297,8 +297,10 @@ export class EventService {
   static async getAllEventsForAdmin(filters: any = {}, query?: any) {
     let dbQuery: any = { isDeleted: false };
     
-    if (filters.type) dbQuery.type = filters.type;
-    if (filters.status) dbQuery.status = filters.status;
+    // Explicitly extract only valid filter fields from the filters object
+    // This prevents fields like 'limit' or 'page' from being used as MongoDB filters
+    if (filters.type && filters.type !== "all") dbQuery.type = filters.type;
+    if (filters.status && filters.status !== "all") dbQuery.status = filters.status;
     if (filters.organizerId) dbQuery.organizerId = filters.organizerId;
 
     const { page, limit, skip } = PaginationHelper.getParams(query || {});
@@ -317,12 +319,45 @@ export class EventService {
     return PaginationHelper.formatResponse(filteredEvents, total, page, limit);
   }
 
-  static async getDeletedEvents(userRole: string) {
-    if (!["ADMIN", "SUPER_ADMIN"].includes(userRole)) {
+  static async restoreEvent(eventId: string, userId: string, userRole: string) {
+    const event = await Event.findById(eventId);
+    if (!event) {
+      throw new AppError("Event not found", 404);
+    }
+
+    if (!event.isDeleted) {
+      throw new AppError("Event is not deleted", 400);
+    }
+
+    // Permission check: Must be owner or admin
+    const isOwner = event.organizerId.toString() === userId;
+    const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(userRole);
+
+    if (!isOwner && !isAdmin) {
+      throw new AppError("Unauthorized to restore this event", 403);
+    }
+
+    event.isDeleted = false;
+    event.deletedAt = undefined;
+    await event.save();
+
+    return event;
+  }
+
+  static async getDeletedEvents(userRole: string, userId: string) {
+    let query: any = { isDeleted: true };
+    
+    // Role-based filtering
+    if (userRole === "ORGANIZER") {
+      query.organizerId = userId;
+    } else if (!["ADMIN", "SUPER_ADMIN"].includes(userRole)) {
       throw new AppError("Access denied", 403);
     }
 
-    const events = await Event.find({ isDeleted: true }).populate("organizerId", "fullName email").sort({ deletedAt: -1 });
+    const events = await Event.find(query)
+      .populate("organizerId", "fullName email")
+      .sort({ deletedAt: -1 });
+
     return events.map(event => {
       const eventObj = event.toObject();
       if (eventObj.type === "VOTING") {

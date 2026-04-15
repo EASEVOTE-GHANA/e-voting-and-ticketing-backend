@@ -23,9 +23,14 @@ export class PaystackService implements IPaymentGateway {
         }
       );
 
+      console.log(`[PaystackService] Payment initialized successfully. Reference: ${data.reference}, Auth URL: ${response.data.data.authorization_url}`);
       return response.data.data;
     } catch (error: any) {
-      console.error("Paystack initialization error:", error.response?.data);
+      console.error("[PaystackService] Initialization error:", {
+        message: error.message,
+        response: error.response?.data,
+        reference: data.reference
+      });
       throw new AppError("Payment initialization failed", 500);
     }
   }
@@ -41,7 +46,10 @@ export class PaystackService implements IPaymentGateway {
         }
       );
 
-      return response.data.data;
+      return {
+        ...response.data.data,
+        metadata: response.data.data.metadata
+      };
     } catch (error: any) {
       console.error("Paystack verification error:", error.response?.data);
       throw new AppError("Payment verification failed", 500);
@@ -63,7 +71,9 @@ export class PaystackService implements IPaymentGateway {
       return { 
         isValid: true, 
         reference: event.data.reference,
-        status: 'success'
+        status: 'success',
+        amount: (event.data.amount) / 100, // Convert from subunits (pesewas/kobo)
+        metadata: event.data.metadata
       };
     }
 
@@ -71,7 +81,9 @@ export class PaystackService implements IPaymentGateway {
       return { 
         isValid: true, 
         reference: event.data.reference,
-        status: 'failed'
+        status: 'failed',
+        amount: (event.data.amount) / 100,
+        metadata: event.data.metadata
       };
     }
 
