@@ -8,11 +8,19 @@ import {
   deleteFaq, 
   seedFaqs 
 } from "../controllers/faq.controller";
+import {
+    getActiveBanners,
+    getAllBanners,
+    createBanner,
+    updateBanner,
+    deleteBanner
+} from "../controllers/banner.controller";
 
 const router = Router();
 
 // Public Routes
 router.get("/faqs", getFaqs);
+router.get("/banners", getActiveBanners);
 
 // Admin Routes
 router.get(
@@ -20,6 +28,34 @@ router.get(
   authenticate, 
   requireRole(["ADMIN", "SUPER_ADMIN"]), 
   getAllFaqs
+);
+
+router.get(
+    "/banners/admin",
+    authenticate,
+    requireRole(["ADMIN", "SUPER_ADMIN"]),
+    getAllBanners
+);
+
+router.post(
+    "/banners",
+    authenticate,
+    requireRole(["ADMIN", "SUPER_ADMIN"]),
+    createBanner
+);
+
+router.put(
+    "/banners/:id",
+    authenticate,
+    requireRole(["ADMIN", "SUPER_ADMIN"]),
+    updateBanner
+);
+
+router.delete(
+    "/banners/:id",
+    authenticate,
+    requireRole(["ADMIN", "SUPER_ADMIN"]),
+    deleteBanner
 );
 
 router.put(
