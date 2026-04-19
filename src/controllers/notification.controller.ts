@@ -112,7 +112,7 @@ export const getMyNotifications = asyncHandler(async (req: Request, res: Respons
 
 export const markAsRead = asyncHandler(async (req: Request, res: Response) => {
   const userId = (req as any).user?.id;
-  const result = await NotificationService.markAsRead(req.params.id, userId);
+  const result = await NotificationService.markAsRead(req.params.id as string, userId);
   if (!result) {
     throw new AppError("Notification not found", 404);
   }

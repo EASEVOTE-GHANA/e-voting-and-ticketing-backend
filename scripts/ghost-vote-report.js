@@ -1,78 +1,70 @@
-const mongoose = require("mongoose");
-const dotenv = require("dotenv");
-const path = require("path");
-
-dotenv.config({ path: path.join(__dirname, "../.env") });
-
-async function run() {
-  if (!process.env.MONGO_URI) {
-    console.error("MONGO_URI not found");
-    process.exit(1);
-  }
-
-  try {
-    console.log("Connecting to MongoDB...");
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log("Connected.\n");
-
-    const EventSchema = new mongoose.Schema({}, { strict: false });
-    const PurchaseSchema = new mongoose.Schema({}, { strict: false });
-
-    // Use existing names to match DB collections
-    const Event = mongoose.models.Event || mongoose.model("Event", EventSchema);
-    const Purchase = mongoose.models.Purchase || mongoose.model("Purchase", PurchaseSchema);
-
-    const events = await Event.find({ type: "VOTING", isDeleted: { $ne: true } });
-    const report = [];
-
-    for (const event of events) {
-      let totalVotes = 0;
-      if (event.categories) {
-        event.categories.forEach(cat => {
-          if (cat.candidates) {
-            cat.candidates.forEach(cand => {
-              totalVotes += (cand.votes || 0);
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const mongoose_1 = __importDefault(require("mongoose"));
+const Event_model_1 = require("../src/models/Event.model");
+const Purchase_model_1 = require("../src/models/Purchase.model");
+const dotenv_1 = __importDefault(require("dotenv"));
+const path_1 = __importDefault(require("path"));
+// Load env from the parent directory of a script usually
+dotenv_1.default.config({ path: path_1.default.join(__dirname, "../.env") });
+const MONGO_URI = process.env.MONGO_URI;
+async function generateReport() {
+    if (!MONGO_URI) {
+        console.error("MONGO_URI not found in environment variables.");
+        process.exit(1);
+    }
+    try {
+        console.log("Connecting to MongoDB...");
+        await mongoose_1.default.connect(MONGO_URI);
+        console.log("Connected.\n");
+        const events = await Event_model_1.Event.find({ type: "VOTING", isDeleted: false });
+        const reportData = [];
+        for (const event of events) {
+            // 1. Calculate votes reported in event candidates
+            let votesInResults = 0;
+            event.categories?.forEach(cat => {
+                cat.candidates.forEach(cand => {
+                    votesInResults += (cand.votes || 0);
+                });
             });
-          }
-        });
-      }
-
-      const purchases = await Purchase.aggregate([
-        { 
-          $match: { 
-            eventId: event._id, 
-            type: "VOTE", 
-            status: "PAID" 
-          } 
-        },
-        { $group: { _id: null, total: { $sum: "$voteCount" } } }
-      ]);
-
-      const paidVotes = purchases[0]?.total || 0;
-      const diff = totalVotes - paidVotes;
-
-      if (totalVotes > 0 || paidVotes > 0) {
-        report.push({
-          Title: event.title,
-          Code: event.eventCode,
-          "Votes in Results": totalVotes,
-          "Paid Votes": paidVotes,
-          "Ghost Votes": diff,
-          Status: diff === 0 ? "✅ MATCH" : (diff > 0 ? "⚠️ MISMATCH" : "❓ OVERPAID")
-        });
-      }
+            // 2. Calculate votes verified in PAID purchases
+            const purchaseStats = await Purchase_model_1.Purchase.aggregate([
+                {
+                    $match: {
+                        eventId: event._id,
+                        type: "VOTE",
+                        status: "PAID"
+                    }
+                },
+                { $group: { _id: null, total: { $sum: "$voteCount" } } }
+            ]);
+            const paidVotes = purchaseStats[0]?.total || 0;
+            const difference = votesInResults - paidVotes;
+            if (votesInResults > 0 || paidVotes > 0) {
+                reportData.push({
+                    title: event.title,
+                    eventCode: event.eventCode,
+                    resultsVotes: votesInResults,
+                    verifiedPaidVotes: paidVotes,
+                    ghostVotes: difference,
+                    status: difference === 0 ? "✅ MATCH" : (difference > 0 ? "⚠️ UNPAID VOTES FOUND" : "❓ EXTRA PAYMENTS")
+                });
+            }
+        }
+        if (reportData.length === 0) {
+            console.log("No voting data found.");
+        }
+        else {
+            console.table(reportData);
+        }
+        process.exit(0);
     }
-
-    if (report.length === 0) {
-      console.log("No voting data found.");
-    } else {
-      console.table(report);
+    catch (error) {
+        console.error("Report generation failed:", error);
+        process.exit(1);
     }
-    process.exit(0);
-  } catch (err) {
-    console.error(err);
-    process.exit(1);
-  }
 }
-
-run();
+generateReport();

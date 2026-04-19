@@ -4,7 +4,7 @@ export interface INotification extends Document {
   userId: Schema.Types.ObjectId;
   title: string;
   message: string;
-  type: "BROADCAST" | "SYSTEM" | "PAYOUT" | "EVENT" | "ALERT";
+  type: "BROADCAST" | "SYSTEM" | "PAYOUT" | "EVENT" | "ALERT" | "PAYMENT";
   read: boolean;
   metadata?: Record<string, any>;
   createdAt: Date;
@@ -18,7 +18,7 @@ const NotificationSchema = new Schema<INotification>(
     message: { type: String, required: true },
     type: {
       type: String,
-      enum: ["BROADCAST", "SYSTEM", "PAYOUT", "EVENT", "ALERT"],
+      enum: ["BROADCAST", "SYSTEM", "PAYOUT", "EVENT", "ALERT", "PAYMENT"],
       default: "SYSTEM",
     },
     read: { type: Boolean, default: false, index: true },

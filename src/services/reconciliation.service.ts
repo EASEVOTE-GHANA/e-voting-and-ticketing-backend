@@ -73,18 +73,13 @@ export class ReconciliationService {
     await Purchase.create({
       eventId: event._id,
       type: "VOTE", // Default to vote type for reconciliation
-      source: "system",
+      source: "web", // Change "system" to "web" to match enum ["web", "ussd"]
       status: "PAID",
       amount: gapData.gap,
       paymentReference: `REC-${event._id.toString().slice(-6)}-${Date.now().toString().slice(-4)}`,
       paidAt: new Date(),
-      customerEmail: "reconciliation@easevote.com",
-      metadata: {
-        reconciliation: true,
-        originalCachedRevenue: gapData.cachedRevenue,
-        originalVerifiedRevenue: gapData.verifiedRevenue,
-        reconciledBy: userId
-      }
+      expiresAt: new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000), // 100 years in future
+      customerEmail: "reconciliation@easevote.com"
     });
 
     return {

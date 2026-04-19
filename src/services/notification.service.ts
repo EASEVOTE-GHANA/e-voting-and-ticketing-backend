@@ -9,7 +9,7 @@ export class NotificationService {
     userId: any;
     title: string;
     message: string;
-    type?: "BROADCAST" | "SYSTEM" | "PAYOUT" | "EVENT" | "ALERT";
+    type?: "BROADCAST" | "SYSTEM" | "PAYOUT" | "EVENT" | "ALERT" | "PAYMENT";
     metadata?: Record<string, any>;
   }) {
     try {
@@ -31,7 +31,7 @@ export class NotificationService {
     userIds: any[];
     title: string;
     message: string;
-    type?: "BROADCAST" | "SYSTEM" | "PAYOUT" | "EVENT" | "ALERT";
+    type?: "BROADCAST" | "SYSTEM" | "PAYOUT" | "EVENT" | "ALERT" | "PAYMENT";
     metadata?: Record<string, any>;
   }) {
     try {
@@ -54,7 +54,7 @@ export class NotificationService {
    * Get notifications for a user
    */
   static async getForUser(userId: string, limit = 20) {
-    return await Notification.find({ userId })
+    return await Notification.find({ userId: userId as any })
       .sort({ createdAt: -1 })
       .limit(limit);
   }
@@ -64,8 +64,8 @@ export class NotificationService {
    */
   static async markAsRead(notificationId: string, userId: string) {
     return await Notification.findOneAndUpdate(
-      { _id: notificationId, userId },
-      { read: true },
+      { _id: notificationId, userId } as any,
+      { read: true } as any,
       { new: true }
     );
   }
@@ -75,8 +75,8 @@ export class NotificationService {
    */
   static async markAllAsRead(userId: string) {
     return await Notification.updateMany(
-      { userId, read: false },
-      { read: true }
+      { userId, read: false } as any,
+      { read: true } as any
     );
   }
 }
