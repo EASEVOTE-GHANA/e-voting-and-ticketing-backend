@@ -36,7 +36,7 @@ export class EventService {
           
           // Apply display rules based on settings
           candidates = candidates.map((candidate: any, index: number) => {
-            const candidateObj = { ...candidate };
+            const candidateObj = { ...candidate, id: candidate._id?.toString() };
             
             if (!eventObj.liveResults) {
               // Hide both votes and rank
@@ -56,6 +56,7 @@ export class EventService {
           
           return {
             ...category,
+            id: category._id?.toString(),
             candidates
           };
         });
@@ -68,11 +69,13 @@ export class EventService {
           
           candidates = candidates.map((candidate: any, index: number) => ({
             ...candidate,
+            id: candidate._id?.toString(),
             rank: index + 1
           }));
           
           return {
             ...category,
+            id: category._id?.toString(),
             candidates
           };
         });
@@ -182,21 +185,23 @@ export class EventService {
       }
     }
 
-    // Date validations
-    const startDate = new Date(filteredData.startDate || event.startDate);
-    const endDate = new Date(filteredData.endDate || event.endDate);
-    const now = new Date();
+    // Date validations — only validate if dates are being changed
+    if (filteredData.startDate || filteredData.endDate) {
+      const startDate = new Date(filteredData.startDate || event.startDate);
+      const endDate = new Date(filteredData.endDate || event.endDate);
+      const now = new Date();
 
-    if (filteredData.startDate && startDate < now) {
-      throw new AppError("Start date cannot be in the past", 400);
-    }
+      if (filteredData.startDate && startDate < now) {
+        throw new AppError("Start date cannot be in the past", 400);
+      }
 
-    if (filteredData.endDate && endDate < now) {
-      throw new AppError("End date cannot be in the past", 400);
-    }
+      if (filteredData.endDate && endDate < now) {
+        throw new AppError("End date cannot be in the past", 400);
+      }
 
-    if (endDate <= startDate) {
-      throw new AppError("End date must be later than start date", 400);
+      if (endDate <= startDate) {
+        throw new AppError("End date must be later than start date", 400);
+      }
     }
 
     Object.assign(event, filteredData);
@@ -427,8 +432,8 @@ export class EventService {
   }
 
   // Delegate to other services
-  static async addCategory(eventId: string, categoryData: any, organizerId: string) {
-    return CategoryService.addCategory(eventId, categoryData, organizerId);
+  static async addCategory(eventId: string, categoryData: any, organizerId: string, userRole?: string) {
+    return CategoryService.addCategory(eventId, categoryData, organizerId, userRole);
   }
 
   static async getEventCategories(eventId: string, userId?: string, userRole?: string) {
@@ -447,8 +452,8 @@ export class EventService {
     return CategoryService.deleteCategory(eventId, categoryId, userId, userRole);
   }
 
-  static async addCandidate(eventId: string, categoryId: string, candidateData: any, organizerId: string) {
-    return CandidateService.addCandidate(eventId, categoryId, candidateData, organizerId);
+  static async addCandidate(eventId: string, categoryId: string, candidateData: any, organizerId: string, userRole?: string) {
+    return CandidateService.addCandidate(eventId, categoryId, candidateData, organizerId, userRole);
   }
 
   static async getCandidate(eventId: string, candidateCode: string, userId?: string, userRole?: string) {
@@ -524,6 +529,40 @@ export class EventService {
       liveResults: event.liveResults,
       message: `Live results ${event.liveResults ? 'enabled' : 'disabled'}`
     };
+  }
+
+  static async suspendEvent(eventId: string, userRole: string) {
+    if (!["ADMIN", "SUPER_ADMIN"].includes(userRole)) {
+      throw new AppError("Unauthorized", 403);
+    }
+
+    const event = await Event.findById(eventId);
+    if (!event) throw new AppError("Event not found", 404);
+
+    if (!["LIVE", "APPROVED"].includes(event.status)) {
+      throw new AppError("Only live or approved events can be suspended", 400);
+    }
+
+    event.status = "PAUSED";
+    await event.save();
+    return event;
+  }
+
+  static async resumeEvent(eventId: string, userRole: string) {
+    if (!["ADMIN", "SUPER_ADMIN"].includes(userRole)) {
+      throw new AppError("Unauthorized", 403);
+    }
+
+    const event = await Event.findById(eventId);
+    if (!event) throw new AppError("Event not found", 404);
+
+    if (event.status !== "PAUSED") {
+      throw new AppError("Only paused events can be resumed", 400);
+    }
+
+    event.status = new Date() > new Date(event.endDate) ? "ENDED" : "LIVE";
+    await event.save();
+    return event;
   }
 
   static async toggleShowVoteCount(eventId: string, organizerId: string, userRole: string) {

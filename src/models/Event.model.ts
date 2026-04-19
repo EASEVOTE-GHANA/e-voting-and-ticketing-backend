@@ -83,15 +83,15 @@ const candidateSchema = new Schema<ICandidate>({
   phone: { type: String, required: true },
   imageUrl: { type: String },
   description: { type: String },
-  code: { type: String, required: true, unique: true },
+  code: { type: String, required: true },
   votes: { type: Number, default: 0 }
-});
+}, { toJSON: { virtuals: true }, toObject: { virtuals: true } });
 
 const categorySchema = new Schema<ICategory>({
   name: { type: String, required: true },
   description: { type: String },
   candidates: [candidateSchema]
-});
+}, { toJSON: { virtuals: true }, toObject: { virtuals: true } });
 
 const ticketTypeSchema = new Schema<ITicketType>({
   name: { type: String, required: true },
@@ -174,7 +174,9 @@ const eventSchema = new Schema<IEvent>({
     }
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 export const Event = mongoose.model<IEvent>("Event", eventSchema);

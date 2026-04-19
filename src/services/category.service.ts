@@ -3,13 +3,16 @@ import { AppError } from "../middleware/error.middleware";
 import { EventService } from "./event.service";
 
 export class CategoryService {
-  static async addCategory(eventId: string, categoryData: any, organizerId: string) {
+  static async addCategory(eventId: string, categoryData: any, organizerId: string, userRole?: string) {
     const event = await Event.findById(eventId);
     if (!event) {
       throw new AppError("Event not found", 404);
     }
 
-    if (event.organizerId.toString() !== organizerId) {
+    const isOwner = event.organizerId.toString() === organizerId;
+    const isAdmin = userRole && ["ADMIN", "SUPER_ADMIN"].includes(userRole);
+
+    if (!isOwner && !isAdmin) {
       throw new AppError("Unauthorized", 403);
     }
 
@@ -20,7 +23,8 @@ export class CategoryService {
     event.categories = event.categories || [];
     event.categories.push(categoryData);
     await event.save();
-    return EventService.filterEventResponse(event, organizerId, undefined);
+    const newCategory = event.categories[event.categories.length - 1];
+    return { category: newCategory };
   }
 
   static async getEventCategories(eventId: string, userId?: string, userRole?: string) {

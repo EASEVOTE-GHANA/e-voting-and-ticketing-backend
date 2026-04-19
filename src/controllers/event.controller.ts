@@ -67,14 +67,14 @@ export const publishEvent = asyncHandler(async (req: Request, res: Response) => 
 
 export const addCategory = asyncHandler(async (req: Request, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const event = await CategoryService.addCategory(id, req.body, req.user!.id);
+  const event = await CategoryService.addCategory(id, req.body, req.user!.id, req.user!.role);
   res.json(event);
 });
 
 export const addCandidate = asyncHandler(async (req: Request, res: Response) => {
   const eventId = Array.isArray(req.params.eventId) ? req.params.eventId[0] : req.params.eventId;
   const categoryId = Array.isArray(req.params.categoryId) ? req.params.categoryId[0] : req.params.categoryId;
-  const event = await CandidateService.addCandidate(eventId, categoryId, req.body, req.user!.id);
+  const event = await CandidateService.addCandidate(eventId, categoryId, req.body, req.user!.id, req.user!.role);
   res.json(event);
 });
 
@@ -157,6 +157,18 @@ export const deleteTicketType = asyncHandler(async (req: Request, res: Response)
   const ticketTypeId = Array.isArray(req.params.ticketTypeId) ? req.params.ticketTypeId[0] : req.params.ticketTypeId;
   const result = await TicketService.deleteTicketType(eventId, ticketTypeId, req.user!.id, req.user!.role);
   res.json(result);
+});
+
+export const suspendEvent = asyncHandler(async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const event = await EventService.suspendEvent(id, req.user!.role);
+  res.json(event);
+});
+
+export const resumeEvent = asyncHandler(async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const event = await EventService.resumeEvent(id, req.user!.role);
+  res.json(event);
 });
 
 export const toggleLiveResults = asyncHandler(async (req: Request, res: Response) => {
