@@ -410,6 +410,11 @@ export class PurchaseService {
     if (!candidate) return;
 
     candidate.votes = (candidate.votes || 0) + purchase.voteCount!;
+    
+    // Increment verified stats
+    event.totalRevenue = (event.totalRevenue || 0) + purchase.amount;
+    event.totalPaidVotes = (event.totalPaidVotes || 0) + purchase.voteCount!;
+    
     await event.save();
   }
 
@@ -535,6 +540,11 @@ export class PurchaseService {
     // Move from reserved to sold
     ticketType.reserved = Math.max(0, (ticketType.reserved || 0) - purchase.ticketQuantity!);
     ticketType.sold = (ticketType.sold || 0) + purchase.ticketQuantity!;
+    
+    // Increment verified stats
+    event.totalRevenue = (event.totalRevenue || 0) + purchase.amount;
+    event.totalTicketsSold = (event.totalTicketsSold || 0) + purchase.ticketQuantity!;
+    
     await event.save();
   }
 

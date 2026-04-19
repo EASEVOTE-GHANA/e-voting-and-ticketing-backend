@@ -72,6 +72,11 @@ export interface IEvent extends Document {
   // Ticketing specific
   ticketTypes?: ITicketType[];
   
+  // Financial & Stats (Verified only)
+  totalRevenue: number;
+  totalPaidVotes: number;
+  totalTicketsSold: number;
+  
   // Metadata
   createdAt: Date;
   updatedAt: Date;
@@ -192,7 +197,12 @@ const eventSchema = new Schema<IEvent>({
       },
       message: 'ticketTypes are only valid for TICKETING events'
     }
-  }
+  },
+  
+  // Verified Financials & Stats
+  totalRevenue: { type: Number, default: 0 },
+  totalPaidVotes: { type: Number, default: 0 },
+  totalTicketsSold: { type: Number, default: 0 }
 }, {
   timestamps: true,
   toJSON: { virtuals: true },

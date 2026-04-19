@@ -39,11 +39,11 @@ export class EventService {
           candidates = candidates.map((candidate: any, index: number) => {
             const candidateObj = { ...candidate, id: candidate._id?.toString() };
             
-            if (!eventObj.liveResults) {
+            if (eventObj.liveResults === false) {
               // Hide both votes and rank
               delete candidateObj.votes;
               delete candidateObj.rank;
-            } else if (!eventObj.showVoteCount) {
+            } else if (eventObj.showVoteCount === false) {
               // Show only rank, hide votes
               candidateObj.rank = index + 1;
               delete candidateObj.votes;

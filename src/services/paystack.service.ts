@@ -13,7 +13,8 @@ export class PaystackService implements IPaymentGateway {
         `${this.baseURL}/transaction/initialize`,
         {
           ...data,
-          amount: data.amount * 100, // Convert to pesewas
+          amount: Math.round(data.amount * 100), // Ensure integer (pesewas) and prevent float precision issues
+          currency: "GHS", // Explicitly set currency for Ghana transactions
         },
         {
           headers: {
@@ -31,8 +32,28 @@ export class PaystackService implements IPaymentGateway {
         response: error.response?.data,
         reference: data.reference
       });
-      throw new AppError("Payment initialization failed", 500);
+      // Extract specific message from Paystack or fallback
+      const rawMessage = error.response?.data?.message || "Payment initialization failed";
+      const detailedMessage = this.sanitizeError(rawMessage);
+      throw new AppError(detailedMessage, error.response?.status || 500);
     }
+  }
+
+  private sanitizeError(message: string): string {
+    const msg = message.toLowerCase();
+    
+    // Map technical API errors to voter-friendly language
+    if (msg.includes("amount") || msg.includes("integer")) {
+      return "The requested transaction amount is invalid. Please try a different vote count.";
+    }
+    if (msg.includes("key") || msg.includes("secret") || msg.includes("auth")) {
+      return "We're currently experiencing a connection issue with our payment provider. Staff have been notified.";
+    }
+    if (msg.includes("email")) {
+      return "Please provide a valid email address to continue.";
+    }
+    
+    return "Something went wrong while starting your payment. Please try again in a moment.";
   }
 
   async verifyPayment(reference: string): Promise<PaymentVerificationResult> {

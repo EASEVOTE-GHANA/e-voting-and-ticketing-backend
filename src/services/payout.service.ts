@@ -28,7 +28,10 @@ export class PayoutService {
 
     // 2. Sum gross revenue from PAID purchases for these events
     const purchaseStats = await Purchase.aggregate([
-      { $match: { eventId: { $in: eventIds }, status: "PAID" } },
+      { $match: { 
+        eventId: { $in: eventIds.map(id => new mongoose.Types.ObjectId(id.toString())) }, 
+        status: "PAID" 
+      } },
       { $group: { _id: null, total: { $sum: "$amount" } } }
     ]);
     const grossRevenue = purchaseStats[0]?.total || 0;
