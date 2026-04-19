@@ -148,8 +148,28 @@ const eventSchema = new Schema<IEvent>({
       message: 'allowPublicNominations is only valid for VOTING events'
     }
   } as any,
-  votingStartTime: { type: Date },
-  votingEndTime: { type: Date },
+  votingStartTime: { 
+    type: Date,
+    required: function(this: any) { return this.type === 'VOTING'; },
+    validate: {
+      validator: function(this: IEvent, value: Date) {
+        if (!value || !this.startDate) return true;
+        return value >= this.startDate;
+      },
+      message: 'Voting start time cannot be before event start date'
+    }
+  },
+  votingEndTime: { 
+    type: Date,
+    required: function(this: any) { return this.type === 'VOTING'; },
+    validate: {
+      validator: function(this: IEvent, value: Date) {
+        if (!value || !this.endDate) return true;
+        return value <= this.endDate;
+      },
+      message: 'Voting end time cannot be after event end date'
+    }
+  },
   liveResults: { type: Boolean, default: true },
   showVoteCount: { type: Boolean, default: true },
   whatsappGroupLink: { type: String },

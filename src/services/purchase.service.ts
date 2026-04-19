@@ -130,10 +130,13 @@ export class PurchaseService {
 
     // Check voting time window
     const now = new Date();
-    if (event.votingStartTime && now < event.votingStartTime) {
+    const votingStart = event.votingStartTime || event.startDate;
+    const votingEnd = event.votingEndTime || event.endDate;
+
+    if (votingStart && now < votingStart) {
       throw new AppError("Voting has not started yet", 400);
     }
-    if (event.votingEndTime && now > event.votingEndTime) {
+    if (votingEnd && now > votingEnd) {
       throw new AppError("Voting has ended", 400);
     }
 
@@ -195,10 +198,14 @@ export class PurchaseService {
       metadata: {
         purchaseId: purchase._id,
         eventId: data.eventId,
+        eventTitle: event.title,
+        eventCode: event.eventCode,
         type: "VOTE",
         candidateId: data.candidateId,
+        candidateName: candidate.name,
         categoryId: data.categoryId,
         voteCount: data.voteCount,
+        quantity: data.voteCount, // Alias for frontend compatibility
         customerEmail: data.customerEmail,
         customerName: data.customerName,
         customerPhone: data.customerPhone,
@@ -219,8 +226,30 @@ export class PurchaseService {
     // Reconcile/Find the purchase record using metadata if necessary
     const purchase = await this.reconcilePurchase(reference, paymentData.metadata, paymentData.amount || 0);
 
+    // Robust Fallback: Enrich the response with event and candidate details 
+    // This allows the success page to show names even if metadata is missing.
+    const event = await Event.findById(purchase.eventId);
+    let extraDetails: any = {};
+    
+    if (event) {
+      extraDetails.eventTitle = event.title;
+      extraDetails.eventCode = event.eventCode;
+      
+      if (purchase.type === "VOTE" && purchase.candidateId) {
+        const category = event.categories?.find(cat => cat._id?.toString() === purchase.categoryId?.toString());
+        const candidate = category?.candidates.find(cand => cand._id?.toString() === purchase.candidateId?.toString());
+        if (candidate) {
+          extraDetails.candidateName = candidate.name;
+        }
+      }
+    }
+
     if (purchase.status === "PAID") {
-      return { purchase, message: "Payment already verified" };
+      return { 
+        purchase, 
+        message: "Payment already verified",
+        ...extraDetails
+      };
     }
     
     if (!paymentData.success) {
@@ -246,7 +275,11 @@ export class PurchaseService {
       await this.addVotes(purchase);
     }
 
-    return { purchase, paymentData };
+    return { 
+      purchase, 
+      paymentData,
+      ...extraDetails 
+    };
   }
 
   static async verifyWithGateway(reference: string): Promise<PaymentVerificationResult> {
@@ -599,10 +632,13 @@ export class PurchaseService {
     }
 
     const now = new Date();
-    if (event.votingStartTime && now < event.votingStartTime) {
+    const votingStart = event.votingStartTime || event.startDate;
+    const votingEnd = event.votingEndTime || event.endDate;
+
+    if (votingStart && now < votingStart) {
       throw new AppError("Voting has not started yet", 400);
     }
-    if (event.votingEndTime && now > event.votingEndTime) {
+    if (votingEnd && now > votingEnd) {
       throw new AppError("Voting has ended", 400);
     }
 

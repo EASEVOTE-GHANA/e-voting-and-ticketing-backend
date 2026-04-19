@@ -57,9 +57,9 @@ export class VoteService {
       throw new AppError("Event not found", 404);
     }
 
-    return event.categories?.map(category => {
+    const categories = event.categories?.map(category => {
       let candidates = category.candidates.map(candidate => ({
-        candidateId: candidate._id,
+        id: candidate._id,
         name: candidate.name,
         code: candidate.code,
         voteCount: event.liveResults ? (candidate.votes || 0) : undefined
@@ -76,10 +76,12 @@ export class VoteService {
       }));
 
       return {
-        categoryId: category._id,
-        categoryName: category.name,
+        id: category._id,
+        name: category.name,
         candidates
       };
-    });
+    }) || [];
+
+    return { categories };
   }
 }

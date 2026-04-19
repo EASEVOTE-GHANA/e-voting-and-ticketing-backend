@@ -171,11 +171,17 @@ export class EventService {
       throw new AppError("Cannot modify live event", 400);
     }
 
+    // Explicitly reject type modification
+    if (updateData.type && updateData.type !== event.type) {
+      throw new AppError("Event type cannot be changed after creation", 400);
+    }
+
     // Only allow specific fields to be updated
     const allowedFields = [
       'title', 'description', 'startDate', 'endDate', 'venue', 'isPublic',
       'costPerVote', 'minVotesPerPurchase', 'maxVotesPerPurchase', 'allowPublicNominations',
-      'whatsappGroupLink'
+      'whatsappGroupLink', 'votingStartTime', 'votingEndTime', 'votingStartDate', 'votingEndDate',
+      'imageUrl', 'imagePublicId'
     ];
     
     const filteredData: any = {};
@@ -246,6 +252,7 @@ export class EventService {
     } else if (!userRole || userRole === "PUBLIC") {
       dbQuery.status = { $in: ["NOMINATING", "LIVE", "ENDED"] };
       dbQuery.isPublic = true;
+      dbQuery.endDate = { $gt: new Date() }; // Only show events that haven't reached their end date
     }
     // Admin and Super Admin can see all events (no additional filters)
 
@@ -532,24 +539,26 @@ export class EventService {
   }
 
   static async suspendEvent(eventId: string, userRole: string) {
-    if (!["ADMIN", "SUPER_ADMIN"].includes(userRole)) {
+    if (!["ADMIN", "SUPER_ADMIN", "ORGANIZER"].includes(userRole)) {
       throw new AppError("Unauthorized", 403);
     }
 
     const event = await Event.findById(eventId);
     if (!event) throw new AppError("Event not found", 404);
 
-    if (!["LIVE", "APPROVED"].includes(event.status)) {
+    if (!["LIVE", "APPROVED", "PUBLISHED"].includes(event.status)) {
       throw new AppError("Only live or approved events can be suspended", 400);
     }
 
-    event.status = "PAUSED";
-    await event.save();
-    return event;
+    return await Event.findByIdAndUpdate(
+      eventId, 
+      { status: "PAUSED" }, 
+      { new: true, runValidators: false } // Bypasses full validation for emergency status changes
+    );
   }
 
   static async resumeEvent(eventId: string, userRole: string) {
-    if (!["ADMIN", "SUPER_ADMIN"].includes(userRole)) {
+    if (!["ADMIN", "SUPER_ADMIN", "ORGANIZER"].includes(userRole)) {
       throw new AppError("Unauthorized", 403);
     }
 
@@ -560,9 +569,13 @@ export class EventService {
       throw new AppError("Only paused events can be resumed", 400);
     }
 
-    event.status = new Date() > new Date(event.endDate) ? "ENDED" : "LIVE";
-    await event.save();
-    return event;
+    const targetStatus = new Date() > new Date(event.endDate) ? "ENDED" : "LIVE";
+    
+    return await Event.findByIdAndUpdate(
+      eventId, 
+      { status: targetStatus }, 
+      { new: true, runValidators: false }
+    );
   }
 
   static async toggleShowVoteCount(eventId: string, organizerId: string, userRole: string) {
