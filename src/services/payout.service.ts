@@ -5,6 +5,7 @@ import { Event } from "../models/Event.model";
 import { Settings } from "../models/Settings.model";
 import { AppError } from "../middleware/error.middleware";
 import { PaginationHelper } from "../utils/pagination.util";
+import { ReconciliationService } from "./reconciliation.service";
 
 export class PayoutService {
   /**
@@ -12,8 +13,10 @@ export class PayoutService {
    * Total Earnings (Gross) * (1 - Commission) - (Sum of Payouts [PENDING, PROCESSING, PAID])
    */
   static async getOrganizerBalance(organizerId: string) {
-    // 1. Get all events owned by organizer
-    const events = await Event.find({ organizerId, isDeleted: false }, "_id");
+    const orgId = new mongoose.Types.ObjectId(organizerId);
+
+    // 1. Get all events owned by organizer to define the scope
+    const events = await Event.find({ organizerId: orgId, isDeleted: false }, "_id");
     const eventIds = events.map(e => e._id);
 
     if (eventIds.length === 0) {
@@ -26,32 +29,59 @@ export class PayoutService {
       };
     }
 
-    // 2. Sum gross revenue from PAID purchases for these events
+    console.log(`[PayoutService] Calculating balance for Organizer: ${organizerId}. Found ${eventIds.length} events.`);
+
+    // 2. Sum gross revenue from PAID purchases using a robust aggregation
+    // We match both ObjectId and String forms of eventId to be resistant to DB type inconsistencies
+    const enhancedEventIds = [
+      ...eventIds,
+      ...eventIds.map(id => id.toString())
+    ];
+
     const purchaseStats = await Purchase.aggregate([
-      { $match: { 
-        eventId: { $in: eventIds.map(id => new mongoose.Types.ObjectId(id.toString())) }, 
-        status: "PAID" 
-      } },
-      { $group: { _id: null, total: { $sum: "$amount" } } }
+      { 
+        $match: { 
+          eventId: { $in: enhancedEventIds }, 
+          // Match "PAID", "SUCCESSFUL", or "COMPLETED" case-insensitively
+          status: { $regex: /^(paid|successful|completed)$/i }
+        } 
+      },
+      { 
+        $group: { 
+          _id: null, 
+          total: { $sum: { $convert: { input: "$amount", to: "double", onError: 0, onNull: 0 } } } 
+        } 
+      }
     ]);
+    
+    console.log(`[PayoutService] Purchase aggregation result:`, JSON.stringify(purchaseStats));
     const grossRevenue = purchaseStats[0]?.total || 0;
 
-    // 3. Get platform commission rate
+    // 3. Get platform commission rate (Global setting)
     const commissionSetting = await Settings.findOne({ key: "platform_commission" });
     const commissionRate = commissionSetting ? parseFloat(commissionSetting.value) : 10;
     
-    // 4. Calculate total organizer net share (before payouts)
+    // 4. Calculate total organizer net share
     const organizerNetShare = grossRevenue * (1 - commissionRate / 100);
 
-    // 5. Sum all payouts (excluding REJECTED and CANCELLED)
+    // 4b. Find any "unverified" revenue (gaps between cached stats and ledger)
+    const gaps = await ReconciliationService.getOrganizerGaps(organizerId);
+    const unverifiedRevenue = gaps.reduce((sum, g) => sum + g.gap, 0);
+
+    // 5. Sum all valid payouts
     const payoutStats = await Payout.aggregate([
       { 
         $match: { 
-          organizerId: new mongoose.Types.ObjectId(organizerId), 
+          organizerId: orgId, 
           status: { $in: ["PENDING", "PROCESSING", "PAID"] } 
         } 
       },
-      { $group: { _id: null, total: { $sum: "$amount" } } }
+      { 
+        $group: { 
+          _id: null, 
+          total: { $sum: "$amount" } 
+        } 
+      }
     ]);
     const totalWithdrawnAndPending = payoutStats[0]?.total || 0;
 
@@ -62,8 +92,10 @@ export class PayoutService {
       grossRevenue,
       netRevenue: organizerNetShare,
       totalWithdrawn: totalWithdrawnAndPending,
-      availableBalance,
-      commissionRate
+      availableBalance: Math.max(0, organizerNetShare - totalWithdrawnAndPending),
+      commissionRate,
+      unverifiedRevenue,
+      hasGaps: unverifiedRevenue > 0.01
     };
   }
 

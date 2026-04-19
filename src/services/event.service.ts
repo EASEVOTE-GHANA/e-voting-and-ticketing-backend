@@ -81,8 +81,14 @@ export class EventService {
           };
         });
       }
-    } else if (eventObj.type === "TICKETING") {
+    } else if (eventObj.type === "TICKETING" || eventObj.type === "HYBRID") {
       delete eventObj.categories;
+      if (eventObj.ticketTypes) {
+        eventObj.ticketTypes = eventObj.ticketTypes.map((tt: any) => ({
+          ...tt,
+          id: tt._id?.toString() || tt.id
+        }));
+      }
     }
     
     return eventObj;
@@ -566,13 +572,18 @@ export class EventService {
     };
   }
 
-  static async suspendEvent(eventId: string, userRole: string) {
-    if (!["ADMIN", "SUPER_ADMIN", "ORGANIZER"].includes(userRole)) {
-      throw new AppError("Unauthorized", 403);
-    }
-
+  static async suspendEvent(eventId: string, userRole: string, userId: string) {
     const event = await Event.findById(eventId);
     if (!event) throw new AppError("Event not found", 404);
+
+    // Permission check
+    const isOwner = event.organizerId.toString() === userId;
+    const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(userRole);
+    const isOrganizer = userRole === "ORGANIZER";
+
+    if (!isAdmin && !(isOrganizer && isOwner)) {
+      throw new AppError("Forbidden: insufficient permissions", 403);
+    }
 
     if (!["LIVE", "APPROVED", "PUBLISHED"].includes(event.status)) {
       throw new AppError("Only live or approved events can be suspended", 400);
@@ -585,13 +596,18 @@ export class EventService {
     );
   }
 
-  static async resumeEvent(eventId: string, userRole: string) {
-    if (!["ADMIN", "SUPER_ADMIN", "ORGANIZER"].includes(userRole)) {
-      throw new AppError("Unauthorized", 403);
-    }
-
+  static async resumeEvent(eventId: string, userRole: string, userId: string) {
     const event = await Event.findById(eventId);
     if (!event) throw new AppError("Event not found", 404);
+
+    // Permission check
+    const isOwner = event.organizerId.toString() === userId;
+    const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(userRole);
+    const isOrganizer = userRole === "ORGANIZER";
+
+    if (!isAdmin && !(isOrganizer && isOwner)) {
+      throw new AppError("Forbidden: insufficient permissions", 403);
+    }
 
     if (event.status !== "PAUSED") {
       throw new AppError("Only paused events can be resumed", 400);

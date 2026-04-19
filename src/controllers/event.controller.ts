@@ -7,13 +7,13 @@ import { asyncHandler } from "../middleware/error.middleware";
 
 export const createEvent = asyncHandler(async (req: Request, res: Response) => {
   const event = await EventService.createEvent(req.body, req.user!.id, req.user!.role);
-  res.status(201).json(event);
+  res.status(201).json(EventService.filterEventResponse(event, req.user!.id, req.user!.role));
 });
 
 export const updateEvent = asyncHandler(async (req: Request, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const event = await EventService.updateEvent(id, req.body, req.user!.id, req.user!.role);
-  res.json(event);
+  res.json(EventService.filterEventResponse(event, req.user!.id, req.user!.role));
 });
 
 export const getEvent = asyncHandler(async (req: Request, res: Response) => {
@@ -161,13 +161,13 @@ export const deleteTicketType = asyncHandler(async (req: Request, res: Response)
 
 export const suspendEvent = asyncHandler(async (req: Request, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const event = await EventService.suspendEvent(id, req.user!.role);
+  const event = await EventService.suspendEvent(id, req.user!.role, req.user!.id);
   res.json(event);
 });
 
 export const resumeEvent = asyncHandler(async (req: Request, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const event = await EventService.resumeEvent(id, req.user!.role);
+  const event = await EventService.resumeEvent(id, req.user!.role, req.user!.id);
   res.json(event);
 });
 

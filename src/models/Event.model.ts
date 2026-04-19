@@ -104,7 +104,7 @@ const ticketTypeSchema = new Schema<ITicketType>({
   quantity: { type: Number, required: true },
   reserved: { type: Number, default: 0 },
   sold: { type: Number, default: 0 }
-});
+}, { toJSON: { virtuals: true }, toObject: { virtuals: true } });
 
 const eventSchema = new Schema<IEvent>({
   organizerId: { type: Schema.Types.ObjectId, ref: "User", required: true },
