@@ -72,6 +72,11 @@ export interface IEvent extends Document {
   // Ticketing specific
   ticketTypes?: ITicketType[];
   
+  // Financial & Stats (Verified only)
+  totalRevenue: number;
+  totalPaidVotes: number;
+  totalTicketsSold: number;
+  
   // Metadata
   createdAt: Date;
   updatedAt: Date;
@@ -83,15 +88,15 @@ const candidateSchema = new Schema<ICandidate>({
   phone: { type: String, required: true },
   imageUrl: { type: String },
   description: { type: String },
-  code: { type: String, required: true, unique: true },
+  code: { type: String, required: true },
   votes: { type: Number, default: 0 }
-});
+}, { toJSON: { virtuals: true }, toObject: { virtuals: true } });
 
 const categorySchema = new Schema<ICategory>({
   name: { type: String, required: true },
   description: { type: String },
   candidates: [candidateSchema]
-});
+}, { toJSON: { virtuals: true }, toObject: { virtuals: true } });
 
 const ticketTypeSchema = new Schema<ITicketType>({
   name: { type: String, required: true },
@@ -99,7 +104,7 @@ const ticketTypeSchema = new Schema<ITicketType>({
   quantity: { type: Number, required: true },
   reserved: { type: Number, default: 0 },
   sold: { type: Number, default: 0 }
-});
+}, { toJSON: { virtuals: true }, toObject: { virtuals: true } });
 
 const eventSchema = new Schema<IEvent>({
   organizerId: { type: Schema.Types.ObjectId, ref: "User", required: true },
@@ -148,8 +153,28 @@ const eventSchema = new Schema<IEvent>({
       message: 'allowPublicNominations is only valid for VOTING events'
     }
   } as any,
-  votingStartTime: { type: Date },
-  votingEndTime: { type: Date },
+  votingStartTime: { 
+    type: Date,
+    required: function(this: any) { return this.type === 'VOTING'; },
+    validate: {
+      validator: function(this: IEvent, value: Date) {
+        if (!value || !this.startDate) return true;
+        return value >= this.startDate;
+      },
+      message: 'Voting start time cannot be before event start date'
+    }
+  },
+  votingEndTime: { 
+    type: Date,
+    required: function(this: any) { return this.type === 'VOTING'; },
+    validate: {
+      validator: function(this: IEvent, value: Date) {
+        if (!value || !this.endDate) return true;
+        return value <= this.endDate;
+      },
+      message: 'Voting end time cannot be after event end date'
+    }
+  },
   liveResults: { type: Boolean, default: true },
   showVoteCount: { type: Boolean, default: true },
   whatsappGroupLink: { type: String },
@@ -172,9 +197,16 @@ const eventSchema = new Schema<IEvent>({
       },
       message: 'ticketTypes are only valid for TICKETING events'
     }
-  }
+  },
+  
+  // Verified Financials & Stats
+  totalRevenue: { type: Number, default: 0 },
+  totalPaidVotes: { type: Number, default: 0 },
+  totalTicketsSold: { type: Number, default: 0 }
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 export const Event = mongoose.model<IEvent>("Event", eventSchema);

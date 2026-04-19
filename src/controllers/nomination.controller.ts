@@ -26,6 +26,11 @@ export const getNominations = asyncHandler(async (req: Request, res: Response) =
   res.json(nominations);
 });
 
+export const getAllOrganizerNominations = asyncHandler(async (req: Request, res: Response) => {
+  const nominations = await NominationService.getAllOrganizerNominations(req.user!.id, req.query);
+  res.json(nominations);
+});
+
 export const approveNomination = asyncHandler(async (req: Request, res: Response) => {
   const nominationId = Array.isArray(req.params.nominationId) ? req.params.nominationId[0] : req.params.nominationId;
   const result = await NominationService.approveNomination(nominationId, req.user!.id);

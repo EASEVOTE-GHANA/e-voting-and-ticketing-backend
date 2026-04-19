@@ -6,6 +6,7 @@ import {
   getNominationForm,
   submitNomination,
   getNominations,
+  getAllOrganizerNominations,
   approveNomination,
   rejectNomination
 } from "../controllers/nomination.controller";
@@ -18,6 +19,7 @@ router.post("/events/:eventId/submit", submitNomination);
 
 // Organizer routes
 router.post("/events/:eventId/form", authenticate, requireRole("ORGANIZER", { allowPending: true }), createNominationForm);
+router.get("/", authenticate, requireRole("ORGANIZER", { allowPending: true }), getAllOrganizerNominations);
 router.get("/events/:eventId", authenticate, requireRole("ORGANIZER", { allowPending: true }), getNominations);
 router.patch("/:nominationId/approve", authenticate, requireRole("ORGANIZER", { allowPending: true }), approveNomination);
 router.patch("/:nominationId/reject", authenticate, requireRole("ORGANIZER", { allowPending: true }), rejectNomination);

@@ -4,6 +4,7 @@ import { PaginationHelper } from "../utils/pagination.util";
 import { CandidateService } from "./candidate.service";
 import { CategoryService } from "./category.service";
 import { TicketService } from "./ticket.service";
+import { NotificationService } from "./notification.service";
 import crypto from "crypto";
 import mongoose from "mongoose";
 
@@ -36,13 +37,13 @@ export class EventService {
           
           // Apply display rules based on settings
           candidates = candidates.map((candidate: any, index: number) => {
-            const candidateObj = { ...candidate };
+            const candidateObj = { ...candidate, id: candidate._id?.toString() };
             
-            if (!eventObj.liveResults) {
+            if (eventObj.liveResults === false) {
               // Hide both votes and rank
               delete candidateObj.votes;
               delete candidateObj.rank;
-            } else if (!eventObj.showVoteCount) {
+            } else if (eventObj.showVoteCount === false) {
               // Show only rank, hide votes
               candidateObj.rank = index + 1;
               delete candidateObj.votes;
@@ -56,6 +57,7 @@ export class EventService {
           
           return {
             ...category,
+            id: category._id?.toString(),
             candidates
           };
         });
@@ -68,17 +70,25 @@ export class EventService {
           
           candidates = candidates.map((candidate: any, index: number) => ({
             ...candidate,
+            id: candidate._id?.toString(),
             rank: index + 1
           }));
           
           return {
             ...category,
+            id: category._id?.toString(),
             candidates
           };
         });
       }
-    } else if (eventObj.type === "TICKETING") {
+    } else if (eventObj.type === "TICKETING" || eventObj.type === "HYBRID") {
       delete eventObj.categories;
+      if (eventObj.ticketTypes) {
+        eventObj.ticketTypes = eventObj.ticketTypes.map((tt: any) => ({
+          ...tt,
+          id: tt._id?.toString() || tt.id
+        }));
+      }
     }
     
     return eventObj;
@@ -125,6 +135,15 @@ export class EventService {
       status: "DRAFT"
     });
 
+    // Create notification for organizer
+    await NotificationService.create({
+      userId: organizerId,
+      title: "Event Created",
+      message: `Your event "${event.title}" has been created as a draft. You can now add categories and candidates.`,
+      type: "EVENT",
+      metadata: { eventId: event._id }
+    });
+
     // Populate organizer and return with id field
     const populatedEvent = await Event.findById(event._id).populate("organizerId", "fullName email");
     
@@ -168,11 +187,17 @@ export class EventService {
       throw new AppError("Cannot modify live event", 400);
     }
 
+    // Explicitly reject type modification
+    if (updateData.type && updateData.type !== event.type) {
+      throw new AppError("Event type cannot be changed after creation", 400);
+    }
+
     // Only allow specific fields to be updated
     const allowedFields = [
       'title', 'description', 'startDate', 'endDate', 'venue', 'isPublic',
       'costPerVote', 'minVotesPerPurchase', 'maxVotesPerPurchase', 'allowPublicNominations',
-      'whatsappGroupLink'
+      'whatsappGroupLink', 'votingStartTime', 'votingEndTime', 'votingStartDate', 'votingEndDate',
+      'imageUrl', 'imagePublicId'
     ];
     
     const filteredData: any = {};
@@ -182,21 +207,23 @@ export class EventService {
       }
     }
 
-    // Date validations
-    const startDate = new Date(filteredData.startDate || event.startDate);
-    const endDate = new Date(filteredData.endDate || event.endDate);
-    const now = new Date();
+    // Date validations — only validate if dates are being changed
+    if (filteredData.startDate || filteredData.endDate) {
+      const startDate = new Date(filteredData.startDate || event.startDate);
+      const endDate = new Date(filteredData.endDate || event.endDate);
+      const now = new Date();
 
-    if (filteredData.startDate && startDate < now) {
-      throw new AppError("Start date cannot be in the past", 400);
-    }
+      if (filteredData.startDate && startDate < now) {
+        throw new AppError("Start date cannot be in the past", 400);
+      }
 
-    if (filteredData.endDate && endDate < now) {
-      throw new AppError("End date cannot be in the past", 400);
-    }
+      if (filteredData.endDate && endDate < now) {
+        throw new AppError("End date cannot be in the past", 400);
+      }
 
-    if (endDate <= startDate) {
-      throw new AppError("End date must be later than start date", 400);
+      if (endDate <= startDate) {
+        throw new AppError("End date must be later than start date", 400);
+      }
     }
 
     Object.assign(event, filteredData);
@@ -241,6 +268,7 @@ export class EventService {
     } else if (!userRole || userRole === "PUBLIC") {
       dbQuery.status = { $in: ["NOMINATING", "LIVE", "ENDED"] };
       dbQuery.isPublic = true;
+      dbQuery.endDate = { $gt: new Date() }; // Only show events that haven't reached their end date
     }
     // Admin and Super Admin can see all events (no additional filters)
 
@@ -385,6 +413,15 @@ export class EventService {
 
     event.status = "PENDING_REVIEW";
     await event.save();
+
+    await NotificationService.create({
+      userId: organizerId,
+      title: "Event Submitted for Review",
+      message: `Your event "${event.title}" has been submitted for review. An admin will check it shortly.`,
+      type: "EVENT",
+      metadata: { eventId: event._id }
+    });
+
     return event;
   }
 
@@ -404,6 +441,15 @@ export class EventService {
 
     event.status = "APPROVED";
     await event.save();
+
+    await NotificationService.create({
+      userId: event.organizerId,
+      title: "Event Approved",
+      message: `Great news! Your event "${event.title}" has been approved. You can now publish it to make it live.`,
+      type: "EVENT",
+      metadata: { eventId: event._id }
+    });
+
     return event;
   }
 
@@ -427,8 +473,8 @@ export class EventService {
   }
 
   // Delegate to other services
-  static async addCategory(eventId: string, categoryData: any, organizerId: string) {
-    return CategoryService.addCategory(eventId, categoryData, organizerId);
+  static async addCategory(eventId: string, categoryData: any, organizerId: string, userRole?: string) {
+    return CategoryService.addCategory(eventId, categoryData, organizerId, userRole);
   }
 
   static async getEventCategories(eventId: string, userId?: string, userRole?: string) {
@@ -447,8 +493,8 @@ export class EventService {
     return CategoryService.deleteCategory(eventId, categoryId, userId, userRole);
   }
 
-  static async addCandidate(eventId: string, categoryId: string, candidateData: any, organizerId: string) {
-    return CandidateService.addCandidate(eventId, categoryId, candidateData, organizerId);
+  static async addCandidate(eventId: string, categoryId: string, candidateData: any, organizerId: string, userRole?: string) {
+    return CandidateService.addCandidate(eventId, categoryId, candidateData, organizerId, userRole);
   }
 
   static async getCandidate(eventId: string, candidateCode: string, userId?: string, userRole?: string) {
@@ -524,6 +570,56 @@ export class EventService {
       liveResults: event.liveResults,
       message: `Live results ${event.liveResults ? 'enabled' : 'disabled'}`
     };
+  }
+
+  static async suspendEvent(eventId: string, userRole: string, userId: string) {
+    const event = await Event.findById(eventId);
+    if (!event) throw new AppError("Event not found", 404);
+
+    // Permission check
+    const isOwner = event.organizerId.toString() === userId;
+    const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(userRole);
+    const isOrganizer = userRole === "ORGANIZER";
+
+    if (!isAdmin && !(isOrganizer && isOwner)) {
+      throw new AppError("Forbidden: insufficient permissions", 403);
+    }
+
+    if (!["LIVE", "APPROVED", "PUBLISHED"].includes(event.status)) {
+      throw new AppError("Only live or approved events can be suspended", 400);
+    }
+
+    return await Event.findByIdAndUpdate(
+      eventId, 
+      { status: "PAUSED" }, 
+      { new: true, runValidators: false } // Bypasses full validation for emergency status changes
+    );
+  }
+
+  static async resumeEvent(eventId: string, userRole: string, userId: string) {
+    const event = await Event.findById(eventId);
+    if (!event) throw new AppError("Event not found", 404);
+
+    // Permission check
+    const isOwner = event.organizerId.toString() === userId;
+    const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(userRole);
+    const isOrganizer = userRole === "ORGANIZER";
+
+    if (!isAdmin && !(isOrganizer && isOwner)) {
+      throw new AppError("Forbidden: insufficient permissions", 403);
+    }
+
+    if (event.status !== "PAUSED") {
+      throw new AppError("Only paused events can be resumed", 400);
+    }
+
+    const targetStatus = new Date() > new Date(event.endDate) ? "ENDED" : "LIVE";
+    
+    return await Event.findByIdAndUpdate(
+      eventId, 
+      { status: targetStatus }, 
+      { new: true, runValidators: false }
+    );
   }
 
   static async toggleShowVoteCount(eventId: string, organizerId: string, userRole: string) {

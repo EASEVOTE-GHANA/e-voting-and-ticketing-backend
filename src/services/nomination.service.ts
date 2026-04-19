@@ -139,6 +139,20 @@ export class NominationService {
     return PaginationHelper.formatResponse(nominations, total, page, limit);
   }
 
+  static async getAllOrganizerNominations(organizerId: string, query?: any) {
+    const events = await Event.find({ organizerId });
+    const eventIds = events.map(e => e._id);
+
+    const filter: any = { eventId: { $in: eventIds } };
+    if (query?.status && query.status !== 'ALL') filter.status = query.status;
+
+    const nominations = await Nomination.find(filter)
+      .populate("eventId", "title eventCode nominationForm")
+      .sort({ createdAt: -1 });
+
+    return nominations;
+  }
+
   static async approveNomination(nominationId: string, organizerId: string) {
     const nomination = await Nomination.findById(nominationId);
     if (!nomination) {

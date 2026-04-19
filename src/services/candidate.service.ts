@@ -23,13 +23,16 @@ export class CandidateService {
     }
   }
 
-  static async addCandidate(eventId: string, categoryId: string, candidateData: any, organizerId: string) {
+  static async addCandidate(eventId: string, categoryId: string, candidateData: any, organizerId: string, userRole?: string) {
     const event = await Event.findById(eventId);
     if (!event) {
       throw new AppError("Event not found", 404);
     }
 
-    if (event.organizerId.toString() !== organizerId) {
+    const isOwner = event.organizerId.toString() === organizerId;
+    const isAdmin = userRole && ["ADMIN", "SUPER_ADMIN"].includes(userRole);
+
+    if (!isOwner && !isAdmin) {
       throw new AppError("Unauthorized", 403);
     }
 
@@ -39,8 +42,9 @@ export class CandidateService {
     }
 
     const candidateCode = this.generateCandidateCode();
+    const { code: _ignored, ...safeData } = candidateData;
     const newCandidate = {
-      ...candidateData,
+      ...safeData,
       code: candidateCode
     };
     

@@ -8,6 +8,7 @@ import { AppsMobileService } from "./appsmobile.service";
 import { AppError } from "../middleware/error.middleware";
 import { PaginationHelper } from "../utils/pagination.util";
 import { GatewayService } from "./gateway.service";
+import { NotificationService } from "./notification.service";
 import crypto from "crypto";
 import { IPurchase } from "../models/Purchase.model";
 import { IPaymentGateway, PaymentVerificationResult } from "../payment-gateway.interface";
@@ -130,10 +131,13 @@ export class PurchaseService {
 
     // Check voting time window
     const now = new Date();
-    if (event.votingStartTime && now < event.votingStartTime) {
+    const votingStart = event.votingStartTime || event.startDate;
+    const votingEnd = event.votingEndTime || event.endDate;
+
+    if (votingStart && now < votingStart) {
       throw new AppError("Voting has not started yet", 400);
     }
-    if (event.votingEndTime && now > event.votingEndTime) {
+    if (votingEnd && now > votingEnd) {
       throw new AppError("Voting has ended", 400);
     }
 
@@ -195,10 +199,14 @@ export class PurchaseService {
       metadata: {
         purchaseId: purchase._id,
         eventId: data.eventId,
+        eventTitle: event.title,
+        eventCode: event.eventCode,
         type: "VOTE",
         candidateId: data.candidateId,
+        candidateName: candidate.name,
         categoryId: data.categoryId,
         voteCount: data.voteCount,
+        quantity: data.voteCount, // Alias for frontend compatibility
         customerEmail: data.customerEmail,
         customerName: data.customerName,
         customerPhone: data.customerPhone,
@@ -219,8 +227,30 @@ export class PurchaseService {
     // Reconcile/Find the purchase record using metadata if necessary
     const purchase = await this.reconcilePurchase(reference, paymentData.metadata, paymentData.amount || 0);
 
+    // Robust Fallback: Enrich the response with event and candidate details 
+    // This allows the success page to show names even if metadata is missing.
+    const event = await Event.findById(purchase.eventId);
+    let extraDetails: any = {};
+    
+    if (event) {
+      extraDetails.eventTitle = event.title;
+      extraDetails.eventCode = event.eventCode;
+      
+      if (purchase.type === "VOTE" && purchase.candidateId) {
+        const category = event.categories?.find(cat => cat._id?.toString() === purchase.categoryId?.toString());
+        const candidate = category?.candidates.find(cand => cand._id?.toString() === purchase.candidateId?.toString());
+        if (candidate) {
+          extraDetails.candidateName = candidate.name;
+        }
+      }
+    }
+
     if (purchase.status === "PAID") {
-      return { purchase, message: "Payment already verified" };
+      return { 
+        purchase, 
+        message: "Payment already verified",
+        ...extraDetails
+      };
     }
     
     if (!paymentData.success) {
@@ -246,7 +276,39 @@ export class PurchaseService {
       await this.addVotes(purchase);
     }
 
-    return { purchase, paymentData };
+    // Notify Organizer
+    await this.notifyOrganizerOfPurchase(purchase);
+
+    return { 
+      purchase, 
+      paymentData,
+      ...extraDetails 
+    };
+  }
+
+  private static async notifyOrganizerOfPurchase(purchase: IPurchase) {
+    try {
+      const event = await Event.findById(purchase.eventId);
+      if (!event) return;
+
+      const title = purchase.type === "TICKET" ? "New Ticket Sold" : "New Vote Received";
+      const message = purchase.type === "TICKET" 
+        ? `${purchase.ticketQuantity} ticket(s) sold for "${event.title}".`
+        : `${purchase.voteCount} vote(s) received for "${event.title}".`;
+
+      await NotificationService.create({
+        userId: event.organizerId,
+        title,
+        message,
+        type: purchase.type === "TICKET" ? "EVENT" : "PAYMENT",
+        metadata: { 
+          eventId: event._id,
+          purchaseId: purchase._id
+        }
+      });
+    } catch (err) {
+      console.error("Failed to notify organizer of purchase:", err);
+    }
   }
 
   static async verifyWithGateway(reference: string): Promise<PaymentVerificationResult> {
@@ -348,6 +410,11 @@ export class PurchaseService {
     if (!candidate) return;
 
     candidate.votes = (candidate.votes || 0) + purchase.voteCount!;
+    
+    // Increment verified stats
+    event.totalRevenue = (event.totalRevenue || 0) + purchase.amount;
+    event.totalPaidVotes = (event.totalPaidVotes || 0) + purchase.voteCount!;
+    
     await event.save();
   }
 
@@ -473,6 +540,11 @@ export class PurchaseService {
     // Move from reserved to sold
     ticketType.reserved = Math.max(0, (ticketType.reserved || 0) - purchase.ticketQuantity!);
     ticketType.sold = (ticketType.sold || 0) + purchase.ticketQuantity!;
+    
+    // Increment verified stats
+    event.totalRevenue = (event.totalRevenue || 0) + purchase.amount;
+    event.totalTicketsSold = (event.totalTicketsSold || 0) + purchase.ticketQuantity!;
+    
     await event.save();
   }
 
@@ -599,10 +671,13 @@ export class PurchaseService {
     }
 
     const now = new Date();
-    if (event.votingStartTime && now < event.votingStartTime) {
+    const votingStart = event.votingStartTime || event.startDate;
+    const votingEnd = event.votingEndTime || event.endDate;
+
+    if (votingStart && now < votingStart) {
       throw new AppError("Voting has not started yet", 400);
     }
-    if (event.votingEndTime && now > event.votingEndTime) {
+    if (votingEnd && now > votingEnd) {
       throw new AppError("Voting has ended", 400);
     }
 
