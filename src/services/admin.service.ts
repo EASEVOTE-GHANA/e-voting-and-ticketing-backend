@@ -3,6 +3,7 @@ import { hashPassword, validatePassword } from "../utils/password";
 import { AppError } from "../middleware/error.middleware";
 import { EmailService } from "./email.service";
 import { TokenService } from "./token.service";
+import { NotificationService } from "./notification.service";
 
 export class AdminService {
   static async inviteAdmin(adminData: {
@@ -65,6 +66,13 @@ export class AdminService {
 
     user.status = "ACTIVE";
     await user.save();
+
+    await NotificationService.create({
+      userId: user._id,
+      title: "Account Approved",
+      message: "Congratulations! Your organizer account has been approved. You can now start creating and publishing events.",
+      type: "SYSTEM"
+    });
 
     return { message: "Organizer approved" };
   }

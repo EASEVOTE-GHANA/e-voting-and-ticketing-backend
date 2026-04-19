@@ -14,6 +14,7 @@ import nominationRoutes from "./routes/nomination.routes";
 import ussdRoutes from "./routes/ussd.routes";
 import payoutRoutes from "./routes/payout.routes";
 import cmsRoutes from "./routes/cms.routes";
+import notificationRoutes from "./routes/notification.routes";
 import { globalErrorHandler } from "./middleware/error.middleware";
 import { CronService } from "./services/cron.service";
 
@@ -36,6 +37,7 @@ app.use("/api/nominations", nominationRoutes);
 app.use("/api/ussd", ussdRoutes);
 app.use("/api/payouts", payoutRoutes);
 app.use("/api/cms", cmsRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // Start cron jobs
 CronService.start();

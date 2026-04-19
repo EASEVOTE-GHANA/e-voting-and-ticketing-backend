@@ -4,6 +4,7 @@ import { signTokens } from "../utils/jwt";
 import { AppError } from "../middleware/error.middleware";
 import { EmailService } from "./email.service";
 import { TokenService } from "./token.service";
+import { NotificationService } from "./notification.service";
 
 export class AuthService {
   static async register(userData: {
@@ -35,6 +36,15 @@ export class AuthService {
     });
 
     console.log("User created, generating verification token...");
+
+    // Create welcome notification
+    await NotificationService.create({
+      userId: user._id,
+      title: "Welcome to EaseVote!",
+      message: "Your organizer account has been created successfully. It is currently pending admin approval.",
+      type: "SYSTEM"
+    });
+
     const verificationToken = await TokenService.createEmailVerificationToken(user._id.toString());
     console.log("Verification token created:", verificationToken);
 

@@ -4,6 +4,7 @@ import { PaginationHelper } from "../utils/pagination.util";
 import { CandidateService } from "./candidate.service";
 import { CategoryService } from "./category.service";
 import { TicketService } from "./ticket.service";
+import { NotificationService } from "./notification.service";
 import crypto from "crypto";
 import mongoose from "mongoose";
 
@@ -126,6 +127,15 @@ export class EventService {
       organizerId: new mongoose.Types.ObjectId(organizerId),
       eventCode,
       status: "DRAFT"
+    });
+
+    // Create notification for organizer
+    await NotificationService.create({
+      userId: organizerId,
+      title: "Event Created",
+      message: `Your event "${event.title}" has been created as a draft. You can now add categories and candidates.`,
+      type: "EVENT",
+      metadata: { eventId: event._id }
     });
 
     // Populate organizer and return with id field
@@ -397,6 +407,15 @@ export class EventService {
 
     event.status = "PENDING_REVIEW";
     await event.save();
+
+    await NotificationService.create({
+      userId: organizerId,
+      title: "Event Submitted for Review",
+      message: `Your event "${event.title}" has been submitted for review. An admin will check it shortly.`,
+      type: "EVENT",
+      metadata: { eventId: event._id }
+    });
+
     return event;
   }
 
@@ -416,6 +435,15 @@ export class EventService {
 
     event.status = "APPROVED";
     await event.save();
+
+    await NotificationService.create({
+      userId: event.organizerId,
+      title: "Event Approved",
+      message: `Great news! Your event "${event.title}" has been approved. You can now publish it to make it live.`,
+      type: "EVENT",
+      metadata: { eventId: event._id }
+    });
+
     return event;
   }
 

@@ -8,6 +8,7 @@ import { AppsMobileService } from "./appsmobile.service";
 import { AppError } from "../middleware/error.middleware";
 import { PaginationHelper } from "../utils/pagination.util";
 import { GatewayService } from "./gateway.service";
+import { NotificationService } from "./notification.service";
 import crypto from "crypto";
 import { IPurchase } from "../models/Purchase.model";
 import { IPaymentGateway, PaymentVerificationResult } from "../payment-gateway.interface";
@@ -275,11 +276,39 @@ export class PurchaseService {
       await this.addVotes(purchase);
     }
 
+    // Notify Organizer
+    await this.notifyOrganizerOfPurchase(purchase);
+
     return { 
       purchase, 
       paymentData,
       ...extraDetails 
     };
+  }
+
+  private static async notifyOrganizerOfPurchase(purchase: IPurchase) {
+    try {
+      const event = await Event.findById(purchase.eventId);
+      if (!event) return;
+
+      const title = purchase.type === "TICKET" ? "New Ticket Sold" : "New Vote Received";
+      const message = purchase.type === "TICKET" 
+        ? `${purchase.ticketQuantity} ticket(s) sold for "${event.title}".`
+        : `${purchase.voteCount} vote(s) received for "${event.title}".`;
+
+      await NotificationService.create({
+        userId: event.organizerId,
+        title,
+        message,
+        type: purchase.type === "TICKET" ? "EVENT" : "PAYMENT",
+        metadata: { 
+          eventId: event._id,
+          purchaseId: purchase._id
+        }
+      });
+    } catch (err) {
+      console.error("Failed to notify organizer of purchase:", err);
+    }
   }
 
   static async verifyWithGateway(reference: string): Promise<PaymentVerificationResult> {

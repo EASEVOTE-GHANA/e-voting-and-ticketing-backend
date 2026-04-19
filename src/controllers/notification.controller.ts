@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { User } from "../models/User.model";
 import { NotificationLog } from "../models/NotificationLog.model";
+import { NotificationService } from "../services/notification.service";
 import { EmailService } from "../services/email.service";
 import { SMSService } from "../services/sms.service";
 import { asyncHandler } from "../middleware/error.middleware";
@@ -30,12 +31,20 @@ export const sendManualNotification = asyncHandler(async (req: Request, res: Res
     throw new AppError("No valid recipients found", 404);
   }
 
+  // 1. Create In-App Notifications for all recipients
+  await NotificationService.broadcast({
+    userIds: recipients.map(r => r._id),
+    title: subject || "Update from EaseVote",
+    message: content,
+    type: "BROADCAST"
+  });
+
   const results = {
     email: { success: 0, failed: 0 },
     sms: { success: 0, failed: 0 }
   };
 
-  // Dispatch notifications
+  // Dispatch external notifications
   for (const recipient of recipients) {
     if (channels.includes("EMAIL") && recipient.email) {
       try {
@@ -64,7 +73,7 @@ export const sendManualNotification = asyncHandler(async (req: Request, res: Res
     }
   }
 
-  // Log the notification
+  // Log the notification session
   const status = (results.email.failed > 0 || results.sms.failed > 0) 
     ? (results.email.success > 0 || results.sms.success > 0 ? "PARTIAL_FAILED" : "FAILED")
     : "SENT";
@@ -93,4 +102,25 @@ export const getNotificationLogs = asyncHandler(async (req: Request, res: Respon
     .limit(50);
   
   res.json(logs);
+});
+
+export const getMyNotifications = asyncHandler(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id;
+  const notifications = await NotificationService.getForUser(userId);
+  res.json(notifications);
+});
+
+export const markAsRead = asyncHandler(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id;
+  const result = await NotificationService.markAsRead(req.params.id, userId);
+  if (!result) {
+    throw new AppError("Notification not found", 404);
+  }
+  res.json(result);
+});
+
+export const markAllAsRead = asyncHandler(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id;
+  await NotificationService.markAllAsRead(userId);
+  res.json({ success: true, message: "All notifications marked as read" });
 });
