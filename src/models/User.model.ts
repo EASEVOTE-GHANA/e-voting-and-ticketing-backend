@@ -15,6 +15,8 @@ export interface IUser extends Document {
   emailVerified: boolean;
   lastLoginAt?: Date;
   tokenVersion: number;
+  isDeleted: boolean;
+  deletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -42,7 +44,9 @@ const UserSchema = new Schema<IUser>({
 
   emailVerified: { type: Boolean, default: false },
   lastLoginAt: { type: Date },
-  tokenVersion: { type: Number, default: 0 }
+  tokenVersion: { type: Number, default: 0 },
+  isDeleted: { type: Boolean, default: false },
+  deletedAt: { type: Date }
 }, { timestamps: true });
 
 export const User = model<IUser>("User", UserSchema);

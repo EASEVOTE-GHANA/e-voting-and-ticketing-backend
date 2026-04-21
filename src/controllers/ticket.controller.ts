@@ -22,7 +22,9 @@ export const toggleTicketUsage = asyncHandler(async (req: Request, res: Response
 
 export const getEventTickets = asyncHandler(async (req: Request, res: Response) => {
   const eventId = Array.isArray(req.params.eventId) ? req.params.eventId[0] : req.params.eventId;
-  const tickets = await TicketService.getEventTickets(eventId, req.user!.id);
+  console.log(`[TicketController] Fetching tickets for event: ${eventId}`, req.query);
+  const tickets = await TicketService.getEventTickets(eventId, req.user!.id, req.query);
+  console.log(`[TicketController] Found ${tickets.data?.length || 0} tickets (Total: ${tickets.pagination?.totalItems || 0})`);
   res.json(tickets);
 });
 

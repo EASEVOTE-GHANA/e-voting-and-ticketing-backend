@@ -14,7 +14,7 @@ import { SMSService } from "./sms.service";
 import crypto from "crypto";
 import { IPurchase } from "../models/Purchase.model";
 import { IPaymentGateway, PaymentVerificationResult } from "../payment-gateway.interface";
-import { HydratedDocument } from "mongoose";
+import mongoose, { HydratedDocument } from "mongoose";
 
 type PaymentGateway = 'paystack' | 'flutterwave' | 'appsmobile';
 
@@ -836,17 +836,37 @@ export class PurchaseService {
   static async getAllTransactions(query: any) {
     const { page, limit, skip } = PaginationHelper.getParams(query);
     
+    const filter: any = {};
+    if (query.eventId) {
+      try {
+        filter.eventId = new mongoose.Types.ObjectId(query.eventId);
+      } catch (e) {
+        filter.eventId = query.eventId; // Fallback
+      }
+    }
+    
+    if (query.status && query.status !== "ALL") {
+      // Map frontend status labels (SUCCESS) to backend ledger status (PAID)
+      if (query.status === "SUCCESS" || query.status === "PAID") {
+        filter.status = "PAID";
+      } else {
+        filter.status = query.status;
+      }
+    }
+    
+    if (query.type && query.type !== "ALL") filter.type = query.type;
+
     // Sort by createdAt desc by default
     const sort = { createdAt: -1 };
 
     const [purchases, total] = await Promise.all([
-      Purchase.find()
+      Purchase.find(filter)
         .populate("eventId", "title type")
         .populate("userId", "fullName email")
         .sort(sort as any)
         .skip(skip)
         .limit(limit),
-      Purchase.countDocuments()
+      Purchase.countDocuments(filter)
     ]);
 
     return PaginationHelper.formatResponse(purchases, total, page, limit);
@@ -856,18 +876,40 @@ export class PurchaseService {
     const { page, limit, skip } = PaginationHelper.getParams(query);
     const sort = { createdAt: -1 };
 
-    // Find all event IDs for this organizer
+    // Find all event IDs for this organizer for baseline filter
     const organizerEvents = await Event.find({ organizerId, isDeleted: false }).select("_id");
-    const eventIds = organizerEvents.map(e => e._id);
+    const baseEventIds = organizerEvents.map(e => e._id);
+
+    const filter: any = { eventId: { $in: baseEventIds } };
+    
+    // Allow further narrowing by specific eventId if provided
+    if (query.eventId) {
+      try {
+        const targetId = new mongoose.Types.ObjectId(query.eventId);
+        if (baseEventIds.some(id => id.toString() === targetId.toString())) {
+          filter.eventId = targetId;
+        }
+      } catch (e) {
+        // Handle malformed ID
+      }
+    }
+    
+    if (query.status && query.status !== "ALL") {
+      if (query.status === "SUCCESS" || query.status === "PAID") {
+        filter.status = "PAID";
+      } else {
+        filter.status = query.status;
+      }
+    }
 
     const [purchases, total] = await Promise.all([
-      Purchase.find({ eventId: { $in: eventIds } })
+      Purchase.find(filter)
         .populate("eventId", "title type")
         .populate("userId", "fullName email")
         .sort(sort as any)
         .skip(skip)
         .limit(limit),
-      Purchase.countDocuments({ eventId: { $in: eventIds } })
+      Purchase.countDocuments(filter)
     ]);
 
     return PaginationHelper.formatResponse(purchases, total, page, limit);
@@ -877,21 +919,29 @@ export class PurchaseService {
     const last30Days = new Date();
     last30Days.setDate(last30Days.getDate() - 30);
 
-    // 1. Overall Aggregates
+    // 1. Overall Aggregates (Including Success Rate)
     const overallStats = await Purchase.aggregate([
       {
-        $match: { status: "PAID" }
-      },
-      {
         $facet: {
-          totalRevenue: [
+          paidStats: [
+            { $match: { status: "PAID" } },
             { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } }
           ],
+          allAttemptsCount: [
+            { $match: { status: { $in: ["PAID", "FAILED"] } } },
+            { $count: "count" }
+          ],
+          pendingCount: [
+            { $match: { status: "PENDING" } },
+            { $count: "count" }
+          ],
           byType: [
+            { $match: { status: "PAID" } },
             { $group: { _id: "$type", value: { $sum: "$amount" } } },
             { $project: { name: "$_id", value: 1, _id: 0 } }
           ],
           topEvents: [
+            { $match: { status: "PAID" } },
             { $group: { _id: "$eventId", revenue: { $sum: "$amount" }, count: { $sum: 1 } } },
             { $sort: { revenue: -1 } },
             { $limit: 5 },
@@ -916,6 +966,7 @@ export class PurchaseService {
           trend: [
             {
               $match: {
+                status: "PAID",
                 createdAt: { $gte: last30Days }
               }
             },
@@ -933,13 +984,16 @@ export class PurchaseService {
     ]);
 
     const result = overallStats[0];
-    const totals = result.totalRevenue[0] || { total: 0, count: 0 };
+    const paidTotals = result.paidStats[0] || { total: 0, count: 0 };
+    const allAttempts = result.allAttemptsCount[0]?.count || 0;
+    const pendingStatusCount = result.pendingCount[0]?.count || 0;
+    const successRate = allAttempts > 0 ? (paidTotals.count / allAttempts) * 100 : 100;
 
     // 2. Platform Commission Calculation
     const commissionSetting = await Settings.findOne({ key: "platform_commission" });
     const commissionRate = commissionSetting ? parseFloat(commissionSetting.value) : 10;
     
-    // 3. Top Organizers
+    // 3. Top Organizers (only paid)
     const topOrganizersStats = await Purchase.aggregate([
       { $match: { status: "PAID" } },
       {
@@ -982,10 +1036,12 @@ export class PurchaseService {
     ]);
 
     return {
-      totalRevenue: totals.total,
-      totalTransactions: totals.count,
-      netCommission: totals.total * (commissionRate / 100),
-      organizerEarnings: totals.total * (1 - commissionRate / 100),
+      totalRevenue: paidTotals.total,
+      totalTransactions: paidTotals.count,
+      successRate,
+      pendingCount: pendingStatusCount,
+      netCommission: paidTotals.total * (commissionRate / 100),
+      organizerEarnings: paidTotals.total * (1 - commissionRate / 100),
       byType: result.byType.map((t: any) => ({
         ...t,
         name: t.name === "VOTE" ? "Voting" : "Ticketing"

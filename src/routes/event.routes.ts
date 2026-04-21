@@ -31,6 +31,7 @@ import {
   restoreEvent,
   suspendEvent,
   resumeEvent,
+  getOrganizerStats,
 } from "../controllers/event.controller";
 
 const router = Router();
@@ -44,6 +45,7 @@ router.get("/:eventId/candidates/:candidateCode", optionalAuthenticate, getCandi
 
 // Organizer routes
 router.get("/my/events", authenticate, requireRole("ORGANIZER", { allowPending: true }), getMyEvents);
+router.get("/my/stats", authenticate, requireRole("ORGANIZER", { allowPending: true }), getOrganizerStats);
 router.post("/", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), createEvent);
 router.put("/:id", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), updateEvent);
 router.patch("/:id/submit", authenticate, requireRole("ORGANIZER"), submitForReview);

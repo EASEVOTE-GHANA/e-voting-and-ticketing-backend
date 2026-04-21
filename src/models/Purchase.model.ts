@@ -66,6 +66,7 @@ const purchaseSchema = new Schema<IPurchase>({
   timestamps: true
 });
 
+purchaseSchema.index({ eventId: 1 });
 purchaseSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 purchaseSchema.index({ paymentReference: 1 });
 
