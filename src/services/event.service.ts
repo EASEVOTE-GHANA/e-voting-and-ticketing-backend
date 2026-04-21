@@ -197,7 +197,7 @@ export class EventService {
       'title', 'description', 'startDate', 'endDate', 'venue', 'isPublic',
       'costPerVote', 'minVotesPerPurchase', 'maxVotesPerPurchase', 'allowPublicNominations',
       'whatsappGroupLink', 'votingStartTime', 'votingEndTime', 'votingStartDate', 'votingEndDate',
-      'imageUrl', 'imagePublicId'
+      'imageUrl', 'imagePublicId', 'categories', 'ticketTypes'
     ];
     
     const filteredData: any = {};
@@ -232,7 +232,12 @@ export class EventService {
   }
 
   static async getEvent(eventId: string, userId?: string, userRole?: string) {
-    const event = await Event.findOne({ _id: eventId, isDeleted: false }).populate("organizerId", "fullName email");
+    const isObjectId = /^[a-f\d]{24}$/i.test(eventId);
+    const query = isObjectId
+      ? { _id: eventId, isDeleted: false }
+      : { eventCode: eventId.toUpperCase(), isDeleted: false };
+
+    const event = await Event.findOne(query).populate("organizerId", "fullName email");
     if (!event) {
       throw new AppError("Event not found", 404);
     }
@@ -467,8 +472,32 @@ export class EventService {
       throw new AppError("Only approved events can be published", 400);
     }
 
-    event.status = "PUBLISHED";
+    const now = new Date();
+    // Use votingStartDate if set, otherwise fall back to startDate
+    const effectiveStartTime = event.votingStartDate
+      ? new Date(event.votingStartDate)
+      : new Date(event.startDate);
+
+    // If the voting/start time has already passed, go live immediately
+    if (effectiveStartTime <= now) {
+      event.status = "LIVE";
+    } else {
+      event.status = "PUBLISHED";
+    }
+
     await event.save();
+
+    await NotificationService.create({
+      userId: organizerId,
+      title: event.status === "LIVE" ? "Event Is Live!" : "Event Published",
+      message:
+        event.status === "LIVE"
+          ? `Your event "${event.title}" is now live!`
+          : `Your event "${event.title}" has been published and will go live automatically at the scheduled voting start time.`,
+      type: "EVENT",
+      metadata: { eventId: event._id },
+    });
+
     return event;
   }
 
