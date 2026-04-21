@@ -43,3 +43,8 @@ export const getEventPurchases = asyncHandler(async (req: Request, res: Response
   const result = await PurchaseService.getEventPurchases(eventId, req.user!.id, req.query);
   res.json(result);
 });
+
+export const getOrganizerTransactions = asyncHandler(async (req: Request, res: Response) => {
+  const result = await PurchaseService.getOrganizerTransactions(req.user!.id, req.query);
+  res.json(result);
+});

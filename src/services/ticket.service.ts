@@ -69,7 +69,6 @@ export class TicketService {
   static async getTicketsByPurchase(purchaseId: string) {
     return await Ticket.find({ purchaseId });
   }
-
   static async scanTicket(ticketNumber: string, userId: string) {
     const ticket = await Ticket.findOne({ ticketNumber }).populate('eventId', 'title organizerId');
     if (!ticket) {
@@ -87,6 +86,26 @@ export class TicketService {
 
     ticket.isUsed = true;
     ticket.usedAt = new Date();
+    await ticket.save();
+    
+    return ticket;
+  }
+
+  static async toggleTicketUsage(ticketNumber: string, userId: string) {
+    const ticket = await Ticket.findOne({ ticketNumber }).populate('eventId', 'title organizerId');
+    if (!ticket) {
+      throw new AppError("Ticket not found", 404);
+    }
+
+    const event = ticket.eventId as any;
+    if (event.organizerId.toString() !== userId) {
+      throw new AppError("Unauthorized", 403);
+    }
+
+    // Toggle the status
+    ticket.isUsed = !ticket.isUsed;
+    ticket.usedAt = ticket.isUsed ? new Date() : undefined;
+    
     await ticket.save();
     
     return ticket;

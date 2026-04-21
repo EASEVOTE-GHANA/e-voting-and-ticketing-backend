@@ -24,7 +24,7 @@ export interface IPurchase extends Document {
   voteCount?: number;
   
   // Timing
-  expiresAt: Date;
+  expiresAt?: Date;
   paidAt?: Date;
   
   // Metadata
@@ -56,7 +56,7 @@ const purchaseSchema = new Schema<IPurchase>({
   categoryId: { type: Schema.Types.ObjectId },
   voteCount: { type: Number },
   
-  expiresAt: { type: Date, required: true },
+  expiresAt: { type: Date },
   paidAt: { type: Date },
   
   customerEmail: { type: String, required: true },

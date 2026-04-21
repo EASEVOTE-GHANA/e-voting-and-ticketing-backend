@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import mongoose from "mongoose";
 import authRoutes from "./routes/auth.routes";
 import adminRoutes from "./routes/admin.routes";
 import blogRoutes from "./routes/blog.routes";
@@ -24,6 +25,21 @@ const app = express();
 app.use(cors());
 app.use(helmet());
 app.use(express.json());
+
+app.get("/api/health", (req, res) => {
+  const healthStatus = {
+    status: "UP",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    database: {
+      status: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    },
+    service: "easevote-backend",
+    version: process.env.npm_package_version || "1.0.0",
+  };
+
+  res.status(200).json(healthStatus);
+});
 
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);

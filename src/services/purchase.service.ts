@@ -9,6 +9,8 @@ import { AppError } from "../middleware/error.middleware";
 import { PaginationHelper } from "../utils/pagination.util";
 import { GatewayService } from "./gateway.service";
 import { NotificationService } from "./notification.service";
+import { EmailService } from "./email.service";
+import { SMSService } from "./sms.service";
 import crypto from "crypto";
 import { IPurchase } from "../models/Purchase.model";
 import { IPaymentGateway, PaymentVerificationResult } from "../payment-gateway.interface";
@@ -267,6 +269,7 @@ export class PurchaseService {
 
     purchase.status = "PAID";
     purchase.paidAt = new Date();
+    purchase.expiresAt = undefined;
     await purchase.save();
 
     if (purchase.type === "TICKET") {
@@ -278,6 +281,9 @@ export class PurchaseService {
 
     // Notify Organizer
     await this.notifyOrganizerOfPurchase(purchase);
+
+    // Notify Customer (Email & SMS)
+    await this.notifyCustomerOfPurchase(purchase);
 
     return { 
       purchase, 
@@ -308,6 +314,79 @@ export class PurchaseService {
       });
     } catch (err) {
       console.error("Failed to notify organizer of purchase:", err);
+    }
+  }
+
+  private static async notifyCustomerOfPurchase(purchase: IPurchase) {
+    try {
+      const event = await Event.findById(purchase.eventId);
+      if (!event) return;
+
+      if (purchase.type === "TICKET") {
+        const tickets = await Ticket.find({ purchaseId: purchase._id });
+        
+        // Find ticket type name from event
+        const ticketTypeNames: Record<string, string> = {};
+        event.ticketTypes?.forEach(tt => {
+          ticketTypeNames[tt._id!.toString()] = tt.name;
+        });
+
+        const ticketData = tickets.map(t => ({
+          ticketNumber: t.ticketNumber,
+          ticketTypeName: ticketTypeNames[t.ticketTypeId.toString()] || "Standard Ticket",
+          qrData: t.qrData
+        }));
+
+        // Send Email
+        await EmailService.sendTicketEmail({
+          to: purchase.customerEmail,
+          customerName: purchase.customerName || "Customer",
+          eventTitle: event.title,
+          eventDate: event.startDate.toDateString(),
+          venue: event.venue || "TBA",
+          tickets: ticketData,
+          totalAmount: purchase.amount,
+          reference: purchase.paymentReference
+        });
+
+        // Send SMS
+        if (purchase.customerPhone) {
+          await SMSService.sendTicketConfirmation(
+            purchase.customerPhone,
+            event.title,
+            purchase.ticketQuantity || 0
+          );
+        }
+      } else if (purchase.type === "VOTE") {
+        // Find candidate name
+        let candidateName = "Candidate";
+        event.categories?.forEach(cat => {
+          const cand = cat.candidates.find(c => c._id?.toString() === purchase.candidateId?.toString());
+          if (cand) candidateName = cand.name;
+        });
+
+        // Send Email
+        await EmailService.sendVoteEmail({
+          to: purchase.customerEmail,
+          customerName: purchase.customerName || "Voter",
+          eventTitle: event.title,
+          candidateName: candidateName,
+          voteCount: purchase.voteCount || 0,
+          totalAmount: purchase.amount,
+          reference: purchase.paymentReference
+        });
+
+        // Send SMS
+        if (purchase.customerPhone) {
+          await SMSService.sendVoteConfirmation(
+            purchase.customerPhone,
+            candidateName,
+            purchase.voteCount || 0
+          );
+        }
+      }
+    } catch (err) {
+      console.error("Failed to notify customer of purchase:", err);
     }
   }
 
@@ -491,6 +570,7 @@ export class PurchaseService {
         if (purchase.status !== "PAID") {
           purchase.status = "PAID";
           purchase.paidAt = new Date();
+          purchase.expiresAt = undefined;
           // Update amount if it was 0 (reconstructed) but the webhook has the real value
           if (purchase.amount === 0 && webhookResult.amount) {
             purchase.amount = webhookResult.amount;
@@ -503,6 +583,9 @@ export class PurchaseService {
           } else if (purchase.type === "VOTE") {
             await this.addVotes(purchase);
           }
+
+          // Notify Customer (Email & SMS)
+          await this.notifyCustomerOfPurchase(purchase);
         }
       } else {
         console.log('Processing failed payment for reference:', webhookResult.reference);
@@ -519,6 +602,7 @@ export class PurchaseService {
     if (purchase && purchase.status !== "PAID") {
       purchase.status = "PAID";
       purchase.paidAt = new Date();
+      purchase.expiresAt = undefined;
       await purchase.save();
 
       if (purchase.type === "TICKET") {
@@ -527,6 +611,9 @@ export class PurchaseService {
       } else if (purchase.type === "VOTE") {
         await this.addVotes(purchase);
       }
+
+      // Notify Customer (Email & SMS)
+      await this.notifyCustomerOfPurchase(purchase);
     }
   }
 
@@ -760,6 +847,27 @@ export class PurchaseService {
         .skip(skip)
         .limit(limit),
       Purchase.countDocuments()
+    ]);
+
+    return PaginationHelper.formatResponse(purchases, total, page, limit);
+  }
+
+  static async getOrganizerTransactions(organizerId: string, query: any) {
+    const { page, limit, skip } = PaginationHelper.getParams(query);
+    const sort = { createdAt: -1 };
+
+    // Find all event IDs for this organizer
+    const organizerEvents = await Event.find({ organizerId, isDeleted: false }).select("_id");
+    const eventIds = organizerEvents.map(e => e._id);
+
+    const [purchases, total] = await Promise.all([
+      Purchase.find({ eventId: { $in: eventIds } })
+        .populate("eventId", "title type")
+        .populate("userId", "fullName email")
+        .sort(sort as any)
+        .skip(skip)
+        .limit(limit),
+      Purchase.countDocuments({ eventId: { $in: eventIds } })
     ]);
 
     return PaginationHelper.formatResponse(purchases, total, page, limit);

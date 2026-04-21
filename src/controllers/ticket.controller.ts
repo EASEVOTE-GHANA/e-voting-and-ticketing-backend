@@ -14,6 +14,12 @@ export const scanTicket = asyncHandler(async (req: Request, res: Response) => {
   res.json(ticket);
 });
 
+export const toggleTicketUsage = asyncHandler(async (req: Request, res: Response) => {
+  const { ticketNumber } = req.body;
+  const ticket = await TicketService.toggleTicketUsage(ticketNumber, req.user!.id);
+  res.json(ticket);
+});
+
 export const getEventTickets = asyncHandler(async (req: Request, res: Response) => {
   const eventId = Array.isArray(req.params.eventId) ? req.params.eventId[0] : req.params.eventId;
   const tickets = await TicketService.getEventTickets(eventId, req.user!.id);
