@@ -3,6 +3,7 @@ import { EventService } from "../services/event.service";
 import { CandidateService } from "../services/candidate.service";
 import { CategoryService } from "../services/category.service";
 import { TicketService } from "../services/ticket.service";
+import { AnalyticsService } from "../services/analytics.service";
 import { asyncHandler } from "../middleware/error.middleware";
 
 export const createEvent = asyncHandler(async (req: Request, res: Response) => {
@@ -169,6 +170,11 @@ export const resumeEvent = asyncHandler(async (req: Request, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const event = await EventService.resumeEvent(id, req.user!.role, req.user!.id);
   res.json(event);
+});
+
+export const getOrganizerStats = asyncHandler(async (req: Request, res: Response) => {
+  const stats = await AnalyticsService.getOrganizerPulse(req.user!.id);
+  res.json({ data: stats });
 });
 
 export const toggleLiveResults = asyncHandler(async (req: Request, res: Response) => {

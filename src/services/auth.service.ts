@@ -75,7 +75,7 @@ export class AuthService {
     const { email, password } = credentials;
 
     const user = await User.findOne({ email });
-    if (!user) {
+    if (!user || user.isDeleted) {
       throw new AppError("Invalid credentials", 401);
     }
 
@@ -111,7 +111,7 @@ export class AuthService {
 
   static async forgotPassword(email: string) {
     const user = await User.findOne({ email });
-    if (!user) {
+    if (!user || user.isDeleted) {
       return { message: "If the email exists, a reset link has been sent." };
     }
 

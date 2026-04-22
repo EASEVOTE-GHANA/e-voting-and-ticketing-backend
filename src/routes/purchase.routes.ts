@@ -7,6 +7,7 @@ import {
   verifyPayment,
   getPurchaseHistory,
   getEventPurchases,
+  getOrganizerTransactions,
   paymentWebhook
 } from "../controllers/purchase.controller";
 
@@ -20,6 +21,7 @@ router.post("/webhook/payment", paymentWebhook);
 
 // Authenticated routes
 router.get("/history", authenticate, getPurchaseHistory);
+router.get("/organizer", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), getOrganizerTransactions);
 router.get("/events/:eventId", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), getEventPurchases);
 
 export default router;

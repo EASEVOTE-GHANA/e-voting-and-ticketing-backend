@@ -1,23 +1,87 @@
 import { User } from "../models/User.model";
+import { Event } from "../models/Event.model";
+import { Payout } from "../models/Payout.model";
+import { PayoutService } from "./payout.service";
+import { EventService } from "./event.service";
 import { hashPassword, validatePassword } from "../utils/password";
 import { AppError } from "../middleware/error.middleware";
+import { Purchase } from "../models/Purchase.model";
 
 export class UserService {
   static async getUser(id: string) {
-    const user = await User.findById(id).select("-passwordHash");
-    if (!user) {
-      throw new AppError("User not found", 404);
+    const user = await User.findById(id).select("-passwordHash").lean();
+    if (!user || (user as any).isDeleted) {
+      throw new AppError("User not found or deleted", 404);
     }
+
+    if (user.role === "ORGANIZER") {
+      const [events, payouts, balanceData] = await Promise.all([
+        Event.find({ organizerId: id, isDeleted: false }).sort({ createdAt: -1 }),
+        Payout.find({ organizerId: id }).sort({ createdAt: -1 }).limit(10),
+        PayoutService.getOrganizerBalance(id)
+      ]);
+
+      // Decorate with live ledger stats to eliminate cached nonsense
+      const eventsWithStats = await EventService.appendLedgerStats(events.map(e => e.toObject ? e.toObject() : e));
+
+      return {
+        ...user,
+        events: eventsWithStats,
+        payouts,
+        balanceData
+      };
+    }
+
     return user;
   }
 
-  static async getAllUsers(currentUserRole: string) {
-    let filter = {};
+  static async getAllUsers(
+    currentUserRole: string, 
+    includeDeleted: boolean = false, 
+    withStats: boolean = false
+  ) {
+    let filter: any = {};
+    
+    if (!includeDeleted) {
+      filter.isDeleted = { $ne: true };
+    }
+
     if (currentUserRole === "ADMIN") {
-      filter = { role: "ORGANIZER" };
+      filter.role = "ORGANIZER";
     }
     
-    return await User.find(filter).select("-passwordHash");
+    const users = await User.find(filter).select("-passwordHash").lean();
+
+    if (withStats && currentUserRole !== "ORGANIZER") {
+      // Enrichment loop (Simplified for performance, ideally would be a single aggregation pipeline)
+      return await Promise.all(users.map(async (user: any) => {
+        const organizerEvents = await Event.find({ organizerId: user._id, isDeleted: false }).select("_id");
+        const eventIds = organizerEvents.map(e => e._id);
+
+        const [eventsCount, ledgerStats, balanceData] = await Promise.all([
+          Promise.resolve(organizerEvents.length),
+          Purchase.aggregate([
+            { 
+              $match: { 
+                eventId: { $in: eventIds }, 
+                status: { $regex: /paid|successful|completed/i } 
+              } 
+            },
+            { $group: { _id: null, total: { $sum: "$amount" } } }
+          ]),
+          PayoutService.getOrganizerBalance(user._id.toString())
+        ]);
+
+        return {
+          ...user,
+          eventsCount,
+          totalRevenue: ledgerStats[0]?.total || 0,
+          balance: balanceData.availableBalance
+        };
+      }));
+    }
+    
+    return users;
   }
 
   static async updateUser(
@@ -27,8 +91,8 @@ export class UserService {
     currentUserRole: string
   ) {
     const user = await User.findById(id);
-    if (!user) {
-      throw new AppError("User not found", 404);
+    if (!user || user.isDeleted) {
+      throw new AppError("User not found or already deleted", 404);
     }
 
     // Permission check
@@ -61,8 +125,8 @@ export class UserService {
     }
 
     const user = await User.findById(id);
-    if (!user) {
-      throw new AppError("User not found", 404);
+    if (!user || user.isDeleted) {
+      throw new AppError("User not found or already deleted", 404);
     }
 
     // Permission check
@@ -77,7 +141,36 @@ export class UserService {
   }
 
   static async deleteUser(id: string, currentUserRole: string) {
-    if (currentUserRole !== "SUPER_ADMIN") {
+    const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(currentUserRole);
+    if (!isAdmin) {
+      throw new AppError("Unauthorized", 403);
+    }
+
+    const user = await User.findById(id);
+    if (!user || user.isDeleted) {
+      throw new AppError("User not found or already deleted", 404);
+    }
+
+    if (user.role === "SUPER_ADMIN") {
+      throw new AppError("Cannot delete super admin", 403);
+    }
+
+    // Admins can only delete organizers
+    if (currentUserRole === "ADMIN" && user.role !== "ORGANIZER") {
+      throw new AppError("Admins can only delete organizers", 403);
+    }
+
+    user.isDeleted = true;
+    user.deletedAt = new Date();
+    user.status = "DISABLED";
+    await user.save();
+    
+    return { message: "User soft-deleted successfully" };
+  }
+
+  static async restoreUser(id: string, currentUserRole: string) {
+    const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(currentUserRole);
+    if (!isAdmin) {
       throw new AppError("Unauthorized", 403);
     }
 
@@ -86,11 +179,20 @@ export class UserService {
       throw new AppError("User not found", 404);
     }
 
-    if (user.role === "SUPER_ADMIN") {
-      throw new AppError("Cannot delete super admin", 403);
+    if (!user.isDeleted) {
+      return { message: "User is not deleted" };
     }
 
-    await User.findByIdAndDelete(id);
-    return { message: "User deleted successfully" };
+    // Admins can only restore organizers
+    if (currentUserRole === "ADMIN" && user.role !== "ORGANIZER") {
+      throw new AppError("Admins can only restore organizers", 403);
+    }
+
+    user.isDeleted = false;
+    user.deletedAt = undefined;
+    user.status = "ACTIVE";
+    await user.save();
+
+    return { message: "User restored successfully" };
   }
 }

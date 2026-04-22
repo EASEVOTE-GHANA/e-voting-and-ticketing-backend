@@ -1,8 +1,11 @@
 import { Event } from "../models/Event.model";
 import { Ticket } from "../models/Ticket.model";
 import { Purchase } from "../models/Purchase.model";
+import { User } from "../models/User.model";
 import { AppError } from "../middleware/error.middleware";
 import { EventService } from "./event.service";
+import { PaginationHelper } from "../utils/pagination.util";
+import mongoose from "mongoose";
 
 export class TicketService {
   static async addTicketType(eventId: string, ticketData: any, organizerId: string) {
@@ -69,7 +72,6 @@ export class TicketService {
   static async getTicketsByPurchase(purchaseId: string) {
     return await Ticket.find({ purchaseId });
   }
-
   static async scanTicket(ticketNumber: string, userId: string) {
     const ticket = await Ticket.findOne({ ticketNumber }).populate('eventId', 'title organizerId');
     if (!ticket) {
@@ -92,17 +94,70 @@ export class TicketService {
     return ticket;
   }
 
-  static async getEventTickets(eventId: string, userId: string) {
+  static async toggleTicketUsage(ticketNumber: string, userId: string) {
+    const ticket = await Ticket.findOne({ ticketNumber }).populate('eventId', 'title organizerId');
+    if (!ticket) {
+      throw new AppError("Ticket not found", 404);
+    }
+
+    const event = ticket.eventId as any;
+    if (event.organizerId.toString() !== userId) {
+      throw new AppError("Unauthorized", 403);
+    }
+
+    // Toggle the status
+    ticket.isUsed = !ticket.isUsed;
+    ticket.usedAt = ticket.isUsed ? new Date() : undefined;
+    
+    await ticket.save();
+    
+    return ticket;
+  }
+
+  static async getEventTickets(eventId: string, userId: string, query: any) {
     const event = await Event.findById(eventId);
     if (!event) {
       throw new AppError("Event not found", 404);
     }
 
     if (event.organizerId.toString() !== userId) {
-      throw new AppError("Unauthorized", 403);
+      const user = await User.findById(userId);
+      const isAdmin = user && ["ADMIN", "SUPER_ADMIN"].includes(user.role);
+      if (!isAdmin) {
+        throw new AppError("Unauthorized", 403);
+      }
     }
 
-    return await Ticket.find({ eventId }).populate('purchaseId', 'customerName customerEmail');
+    const { page, limit, skip } = PaginationHelper.getParams(query);
+    const search = query.query || query.search || "";
+    const status = query.status || "ALL";
+
+    const filter: any = { eventId };
+
+    // Status filter
+    if (status === "USED") filter.isUsed = true;
+    if (status === "UNUSED") filter.isUsed = false;
+
+    // Search filter (Customer Name, Email, Ticket Number)
+    if (search) {
+      const searchRegex = { $regex: search, $options: "i" };
+      filter.$or = [
+        { ticketNumber: searchRegex },
+        { customerName: searchRegex },
+        { customerEmail: searchRegex },
+      ];
+    }
+
+    const [tickets, total] = await Promise.all([
+      Ticket.find(filter)
+        .populate("purchaseId", "customerName customerEmail")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      Ticket.countDocuments(filter),
+    ]);
+
+    return PaginationHelper.formatResponse(tickets, total, page, limit);
   }
 
   static async getTicketStats(eventId: string, userId: string) {

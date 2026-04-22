@@ -10,7 +10,7 @@ export const createNominationForm = asyncHandler(async (req: Request, res: Respo
 
 export const getNominationForm = asyncHandler(async (req: Request, res: Response) => {
   const eventId = Array.isArray(req.params.eventId) ? req.params.eventId[0] : req.params.eventId;
-  const form = await NominationService.getForm(eventId);
+  const form = await NominationService.getForm(eventId, req.user?.id);
   res.json(form);
 });
 

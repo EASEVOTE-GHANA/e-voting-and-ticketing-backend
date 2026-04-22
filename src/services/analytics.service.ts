@@ -1,44 +1,290 @@
+import mongoose from "mongoose";
 import { User } from "../models/User.model";
 import { Event } from "../models/Event.model";
 import { Purchase } from "../models/Purchase.model";
+import { Payout } from "../models/Payout.model";
+import { Settings } from "../models/Settings.model";
 import { Log } from "../models/Log.model";
 import { PaginationHelper } from "../utils/pagination.util";
 
 export class AnalyticsService {
   /**
    * High-level overview stats for the platform pulse.
+   * Derived entirely from the live transaction ledger.
    */
   static async getPlatformPulse() {
-    const [counts, recentActivity] = await Promise.all([
-      // Aggregating counts from multiple collections
-      Promise.all([
-        User.countDocuments(),
-        Event.countDocuments({ status: { $in: ["LIVE", "PUBLISHED"] } }),
-        Purchase.countDocuments({ status: "PAID" }),
-        Purchase.aggregate([
+    try {
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+      sixMonthsAgo.setDate(1);
+      sixMonthsAgo.setHours(0, 0, 0, 0);
+
+      const [
+        countsData,         // 0
+        recentActivity,     // 1
+        commissionSetting,  // 2
+        pendingPayoutData,  // 3
+        trendData,          // 4
+        topEventsData       // 5
+      ] = await Promise.all([
+        // 0. Base counts
+        Promise.all([
+          User.countDocuments(),
+          User.countDocuments({ role: "ORGANIZER" }),
+          Event.countDocuments({ status: { $in: ["LIVE", "PUBLISHED", "APPROVED", "Live", "Upcoming"] } }),
+          Purchase.aggregate([
             { $match: { status: "PAID" } },
-            { $group: { _id: null, total: { $sum: "$amount" } } }
+            { 
+              $group: { 
+                _id: null, 
+                totalVolume: { $sum: "$amount" },
+                totalVotes: { $sum: { $ifNull: ["$voteCount", 0] } },
+                totalTickets: { $sum: { $ifNull: ["$ticketQuantity", 0] } },
+                transactionCount: { $sum: 1 }
+              } 
+            }
+          ])
+        ]),
+        // 1. Logs
+        Log.find()
+          .populate("user", "fullName email avatar role")
+          .sort({ createdAt: -1 })
+          .limit(10),
+        // 2. Settings
+        Settings.findOne({ key: "platform_commission" }),
+        // 3. Pending Payouts
+        Payout.aggregate([
+          { $match: { status: "PENDING" } },
+          { $group: { _id: null, total: { $sum: "$amount" } } }
+        ]),
+        // 4. Revenue Trend
+        Purchase.aggregate([
+          { 
+            $match: { 
+              status: "PAID",
+              createdAt: { $gte: sixMonthsAgo }
+            } 
+          },
+          {
+            $group: {
+              _id: {
+                year: { $year: "$createdAt" },
+                month: { $month: "$createdAt" }
+              },
+              revenue: { $sum: "$amount" }
+            }
+          },
+          { $sort: { "_id.year": 1, "_id.month": 1 } }
+        ]),
+        // 5. Top 5 Events by Ledger Volume
+        Purchase.aggregate([
+          { $match: { status: "PAID" } },
+          { 
+            $group: { 
+              _id: "$eventId", 
+              revenue: { $sum: "$amount" },
+              votes: { $sum: { $ifNull: ["$voteCount", 0] } },
+              tickets: { $sum: { $ifNull: ["$ticketQuantity", 0] } }
+            } 
+          },
+          { $sort: { revenue: -1 } },
+          { $limit: 10 },
+          {
+            $lookup: {
+              from: "events",
+              localField: "_id",
+              foreignField: "_id",
+              as: "eventDetails"
+            }
+          },
+          { $unwind: { path: "$eventDetails", preserveNullAndEmptyArrays: true } },
+          {
+            $lookup: {
+              from: "users",
+              localField: "eventDetails.organizerId",
+              foreignField: "_id",
+              as: "organizerDetails"
+            }
+          },
+          { $unwind: { path: "$organizerDetails", preserveNullAndEmptyArrays: true } }
         ])
-      ]),
-      // Recent Audit Logs
-      Log.find()
-        .populate("user", "fullName email avatar role")
-        .sort({ createdAt: -1 })
-        .limit(10)
-    ]);
+      ]);
 
-    const [totalUsers, activeEvents, successfulSales, totalVolumeData] = counts;
-    const totalVolume = totalVolumeData[0]?.total || 0;
+      const [totalUsers, registeredOrganizers, activeEvents, ledgerData] = countsData;
+      const ledger = ledgerData[0] || { totalVolume: 0, totalVotes: 0, totalTickets: 0, transactionCount: 0 };
+      const pendingPayoutAmt = pendingPayoutData[0]?.total || 0;
+      
+      const commissionRate = commissionSetting ? parseFloat(commissionSetting.value) : 10;
+      const platformFee = ledger.totalVolume * (commissionRate / 100);
 
-    return {
-      overview: {
-        totalUsers,
-        activeEvents,
-        successfulSales,
-        totalVolume
-      },
-      recentActivity
-    };
+      const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const revenueTrend = trendData.map((t: any) => ({
+        name: t._id && t._id.month ? MONTH_NAMES[t._id.month - 1] : "N/A",
+        revenue: t.revenue
+      })).filter(t => t.name !== "N/A");
+
+      const topEvents = topEventsData
+        .filter((e: any) => e.eventDetails)
+        .map((e: any) => ({
+          id: e._id,
+          title: e.eventDetails.title,
+          type: e.eventDetails.type,
+          revenue: e.revenue,
+          votes: e.votes,
+          tickets: e.tickets,
+          organizer: e.organizerDetails ? e.organizerDetails.fullName : "Unknown"
+        }));
+
+      return {
+        overview: {
+          totalUsers,
+          registeredOrganizers,
+          activeEvents,
+          totalRevenue: ledger.totalVolume,
+          totalVotesCast: ledger.totalVotes,
+          ticketsSold: ledger.totalTickets,
+          platformFeeEarned: platformFee,
+          pendingPayouts: pendingPayoutAmt,
+          successfulSales: ledger.transactionCount,
+          revenueTrend,
+          topEvents
+        },
+        recentActivity
+      };
+    } catch (err) {
+      console.error("[AnalyticsService] Error in getPlatformPulse:", err);
+      throw err; // Re-throw for global handler on admin endpoints
+    }
+  }
+
+  /**
+   * High-level overview stats for a specific organizer.
+   * Derived from the live ledger for accuracy.
+   */
+  static async getOrganizerPulse(organizerId: string) {
+    try {
+      if (!organizerId) return { totalRevenue: 0, grossRevenue: 0, totalVotes: 0, totalTickets: 0, revenueTrend: [], topEvents: [] };
+
+      const orgObjectId = new mongoose.Types.ObjectId(organizerId);
+
+      // 1. Get all events owned by organizer to define the scope (Robust Lookup)
+      const events = await Event.find({ organizerId: orgObjectId, isDeleted: false }, "_id");
+      const eventIds = events.map(e => e._id);
+      const enhancedEventIds = [...eventIds, ...eventIds.map(id => id.toString())];
+
+      if (eventIds.length === 0) {
+        return { totalRevenue: 0, grossRevenue: 0, totalVotes: 0, totalTickets: 0, revenueTrend: [], topEvents: [] };
+      }
+
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+      sixMonthsAgo.setDate(1);
+      sixMonthsAgo.setHours(0, 0, 0, 0);
+
+      const [ledgerData, trendData, topEventsData, commissionSetting] = await Promise.all([
+        // 1. Ledger Aggregation
+        Purchase.aggregate([
+          { 
+            $match: { 
+                eventId: { $in: enhancedEventIds }, 
+                status: { $regex: /^(paid|successful|completed)$/i } 
+            } 
+          },
+          { 
+            $group: { 
+              _id: null, 
+              totalVolume: { $sum: { $convert: { input: "$amount", to: "double", onError: 0, onNull: 0 } } },
+              totalVotes: { $sum: { $ifNull: ["$voteCount", 0] } },
+              totalTickets: { $sum: { $ifNull: ["$ticketQuantity", 0] } }
+            } 
+          }
+        ]),
+        // 2. Revenue Trend
+        Purchase.aggregate([
+          { 
+            $match: { 
+              eventId: { $in: enhancedEventIds },
+              status: { $regex: /^(paid|successful|completed)$/i },
+              createdAt: { $gte: sixMonthsAgo }
+            } 
+          },
+          {
+            $group: {
+              _id: {
+                year: { $year: "$createdAt" },
+                month: { $month: "$createdAt" }
+              },
+              revenue: { $sum: { $convert: { input: "$amount", to: "double", onError: 0, onNull: 0 } } }
+            }
+          },
+          { $sort: { "_id.year": 1, "_id.month": 1 } }
+        ]),
+        // 3. Top Events for this Organizer
+        Purchase.aggregate([
+          { 
+            $match: { 
+                eventId: { $in: enhancedEventIds }, 
+                status: { $regex: /^(paid|successful|completed)$/i } 
+            } 
+          },
+          { 
+            $group: { 
+              _id: "$eventId", 
+              revenue: { $sum: { $convert: { input: "$amount", to: "double", onError: 0, onNull: 0 } } },
+              votes: { $sum: { $ifNull: ["$voteCount", 0] } },
+              tickets: { $sum: { $ifNull: ["$ticketQuantity", 0] } }
+            } 
+          },
+          { $sort: { revenue: -1 } },
+          { $limit: 10 },
+          {
+            $lookup: {
+              from: "events",
+              localField: "_id",
+              foreignField: "_id",
+              as: "eventDetails"
+            }
+          },
+          { $unwind: { path: "$eventDetails", preserveNullAndEmptyArrays: true } }
+        ]),
+        Settings.findOne({ key: "platform_commission" })
+      ]);
+
+      const ledger = ledgerData[0] || { totalVolume: 0, totalVotes: 0, totalTickets: 0 };
+      const commissionRate = commissionSetting ? parseFloat(commissionSetting.value) : 10;
+      const netRevenue = ledger.totalVolume * (1 - commissionRate / 100);
+
+      const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const revenueTrend = trendData.map((t: any) => ({
+        name: t._id && t._id.month ? MONTH_NAMES[t._id.month - 1] : "N/A",
+        revenue: t.revenue * (1 - commissionRate / 100)
+      })).filter(t => t.name !== "N/A");
+
+      const topEvents = topEventsData
+        .filter((e: any) => e.eventDetails)
+        .map((e: any) => ({
+          id: e._id,
+          title: e.eventDetails.title,
+          type: e.eventDetails.type,
+          revenue: e.revenue,
+          votes: e.votes,
+          tickets: e.tickets,
+          organizerNet: e.revenue * (1 - commissionRate / 100)
+        }));
+
+      return {
+        totalRevenue: netRevenue, // Net share
+        grossRevenue: ledger.totalVolume,
+        totalVotes: ledger.totalVotes,
+        totalTickets: ledger.totalTickets,
+        commissionRate,
+        revenueTrend,
+        topEvents
+      };
+    } catch (err) {
+      console.error("[AnalyticsService] Error in getOrganizerPulse:", err);
+      return { totalRevenue: 0, grossRevenue: 0, totalVotes: 0, totalTickets: 0, revenueTrend: [], topEvents: [] };
+    }
   }
 
   /**
@@ -134,7 +380,7 @@ export class AnalyticsService {
         user: data.userId,
         action: data.action,
         entityType: data.entityType,
-        entityId: data.entityId,
+        entityId: data.userId, // Defaulting to userId for now if entityId is missing for logs
         metadata: data.metadata
       });
     } catch (err) {

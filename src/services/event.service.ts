@@ -1,4 +1,6 @@
 import { Event, IEvent } from "../models/Event.model";
+import { Purchase } from "../models/Purchase.model";
+import { Ticket } from "../models/Ticket.model";
 import { AppError } from "../middleware/error.middleware";
 import { PaginationHelper } from "../utils/pagination.util";
 import { CandidateService } from "./candidate.service";
@@ -324,7 +326,10 @@ export class EventService {
     
     const filteredEvents = events.map(event => this.filterEventResponse(event, userId, "ORGANIZER"));
 
-    return PaginationHelper.formatResponse(filteredEvents, total, page, limit);
+    // Decorate with live ledger stats to eliminate cached nonsense
+    const eventsWithStats = await this.appendLedgerStats(filteredEvents);
+
+    return PaginationHelper.formatResponse(eventsWithStats, total, page, limit);
   }
 
   static async getAllEventsForAdmin(filters: any = {}, query?: any) {
@@ -349,7 +354,10 @@ export class EventService {
     
     const filteredEvents = events.map(event => this.filterEventResponse(event, undefined, "ADMIN"));
 
-    return PaginationHelper.formatResponse(filteredEvents, total, page, limit);
+    // Decorate with live ledger stats to eliminate cached nonsense
+    const eventsWithStats = await this.appendLedgerStats(filteredEvents);
+
+    return PaginationHelper.formatResponse(eventsWithStats, total, page, limit);
   }
 
   static async restoreEvent(eventId: string, userId: string, userRole: string) {
@@ -677,5 +685,61 @@ export class EventService {
       showVoteCount: event.showVoteCount,
       message: `Vote count display ${event.showVoteCount ? 'enabled' : 'disabled'}`
     };
+  }
+
+  /**
+   * Appends live ledger-derived statistics to a list of events.
+   * Eliminates reliance on cached counters by aggregating the Purchase collection.
+   */
+  static async appendLedgerStats(filteredEvents: any[]) {
+    if (!filteredEvents || filteredEvents.length === 0) return filteredEvents;
+
+    const eventIds = filteredEvents.map(e => e._id || e.id);
+
+    // 1. Aggregate revenue, votes, and tickets from Purchases
+    const stats = await Purchase.aggregate([
+      { 
+        $match: { 
+          eventId: { $in: eventIds }, 
+          // Match any status that essentially means "Paid"
+          status: { $regex: /paid|successful|completed/i }
+        } 
+      },
+      { 
+        $group: { 
+          _id: { eventId: "$eventId", type: "$type" },
+          revenue: { $sum: { $convert: { input: "$amount", to: "double", onError: 0, onNull: 0 } } },
+          votes: { $sum: { $ifNull: ["$voteCount", 0] } },
+          tickets: { $sum: { $ifNull: ["$ticketQuantity", 0] } }
+        } 
+      },
+      {
+        $group: {
+          _id: "$_id.eventId",
+          totalRevenue: { $sum: "$revenue" },
+          totalVotes: { $sum: "$votes" },
+          totalTickets: { $sum: "$tickets" }
+        }
+      }
+    ]);
+
+    // 2. Map stats back to events
+    return filteredEvents.map(event => {
+      const eventIdStr = (event._id || event.id).toString();
+      const ledger = stats.find(s => s._id.toString() === eventIdStr) || {
+        totalRevenue: 0,
+        totalVotes: 0,
+        totalTickets: 0
+      };
+
+      return {
+        ...event,
+        ledgerStats: {
+          revenue: ledger.totalRevenue,
+          votes: ledger.totalVotes,
+          ticketsSold: ledger.totalTickets
+        }
+      };
+    });
   }
 }
