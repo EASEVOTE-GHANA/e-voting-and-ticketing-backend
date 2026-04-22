@@ -763,6 +763,7 @@ export class EventService {
       if (event.type === "VOTING" || event.type === "HYBRID") {
         enrichedCategories = enrichedCategories.map((category: any) => {
           let categoryTotalVotes = 0;
+          let maxVotes = 0;
           const candidates = (category.candidates || []).map((candidate: any) => {
             const candidateIdStr = (candidate._id || candidate.id)?.toString();
             const realVotes = candidateAgg.find(
@@ -771,6 +772,8 @@ export class EventService {
             )?.votes || 0;
             
             categoryTotalVotes += realVotes;
+            if (realVotes > maxVotes) maxVotes = realVotes;
+            
             return {
               ...candidate,
               votes: realVotes,
@@ -782,7 +785,8 @@ export class EventService {
             ...category,
             candidates,
             votes: categoryTotalVotes,
-            totalVotes: categoryTotalVotes
+            totalVotes: categoryTotalVotes,
+            maxVotes: maxVotes
           };
         });
       }
