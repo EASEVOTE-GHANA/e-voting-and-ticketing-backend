@@ -10,6 +10,7 @@ export interface INomination extends Document {
   customFields?: { question: string; answer: string }[];
   nominatorName: string;
   nominatorPhone: string;
+  email?: string;
   status: "PENDING" | "APPROVED" | "REJECTED";
   createdAt: Date;
   updatedAt: Date;
@@ -25,6 +26,7 @@ const nominationSchema = new Schema<INomination>({
   customFields: [{ question: String, answer: String }],
   nominatorName: { type: String, required: true },
   nominatorPhone: { type: String, required: true },
+  email: { type: String },
   status: { type: String, enum: ["PENDING", "APPROVED", "REJECTED"], default: "PENDING" }
 }, { timestamps: true });
 

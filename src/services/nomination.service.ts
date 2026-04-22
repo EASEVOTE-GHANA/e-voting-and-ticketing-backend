@@ -4,6 +4,8 @@ import { Event } from "../models/Event.model";
 import { AppError } from "../middleware/error.middleware";
 import { EventService } from "./event.service";
 import { SMSService } from "./sms.service";
+import { EmailService } from "./email.service";
+import { NotificationService } from "./notification.service";
 import { PaginationHelper } from "../utils/pagination.util";
 
 export class NominationService {
@@ -36,18 +38,22 @@ export class NominationService {
     return form;
   }
 
-  static async getForm(eventId: string) {
+  static async getForm(eventId: string, userId?: string) {
     const event = await Event.findById(eventId);
     if (!event) {
       throw new AppError("Event not found", 404);
     }
 
-    if (!event.allowPublicNominations) {
-      throw new AppError("Public nominations not enabled for this event", 400);
-    }
+    const isOrganizer = userId && event.organizerId.toString() === userId;
 
-    if (event.status !== "NOMINATING") {
-      throw new AppError("Event is not currently taking nominations", 400);
+    if (!isOrganizer) {
+      if (!event.allowPublicNominations) {
+        throw new AppError("Public nominations not enabled for this event", 400);
+      }
+
+      if (!["NOMINATING", "LIVE", "PUBLISHED"].includes(event.status)) {
+        throw new AppError("Event is not currently taking nominations", 400);
+      }
     }
 
     // Enforce nomination dates
@@ -60,15 +66,12 @@ export class NominationService {
     }
 
     const form = await NominationForm.findOne({ eventId });
-    if (!form) {
-      throw new AppError("Nomination form not found", 404);
-    }
 
     return {
       eventId: event._id,
       eventTitle: event.title,
       categories: event.categories?.map(cat => ({ _id: cat._id, name: cat.name })) || [],
-      customFields: form.customFields
+      customFields: form?.customFields || []
     };
   }
 
@@ -82,7 +85,7 @@ export class NominationService {
       throw new AppError("Public nominations not enabled for this event", 400);
     }
 
-    if (event.status !== "NOMINATING") {
+    if (!["NOMINATING", "LIVE", "PUBLISHED"].includes(event.status)) {
       throw new AppError("Event is not currently taking nominations", 400);
     }
 
@@ -109,8 +112,56 @@ export class NominationService {
       photoUrl: nominationData.photoUrl,
       customFields: nominationData.customFields,
       nominatorName: nominationData.nominatorName,
-      nominatorPhone: nominationData.nominatorPhone
+      nominatorPhone: nominationData.nominatorPhone,
+      email: nominationData.email
     });
+
+    // Send immediate confirmation notifications
+    try {
+      const nomineePhone = nominationData.nomineePhone;
+      const nomineeEmail = nominationData.email;
+      
+      let smsMessage = `Hi ${nominationData.nomineeName}! Your nomination for "${event.title}" in the "${category.name}" category has been received.`;
+      
+      if (event.whatsappGroupLink) {
+        smsMessage += ` Joine the official candidates' WhatsApp group: ${event.whatsappGroupLink}`;
+      }
+      
+      smsMessage += ` - EaseVote`;
+
+      // Trigger SMS
+      await SMSService.sendCustomMessage(nomineePhone, smsMessage);
+
+      // Trigger Email
+      if (nomineeEmail) {
+        await EmailService.sendNominationEmail({
+          to: nomineeEmail,
+          nomineeName: nominationData.nomineeName,
+          eventTitle: event.title,
+          categoryName: category.name,
+          whatsappLink: event.whatsappGroupLink
+        });
+      }
+    } catch (error) {
+      console.error('Failed to send nominee confirmation notifications:', error);
+      // We don't throw here to avoid blocking a successful submission result
+    }
+
+    // Send in-app notification to organizer
+    try {
+      await NotificationService.create({
+        userId: event.organizerId,
+        title: `New Nomination: ${nominationData.nomineeName}`,
+        message: `${nominationData.nomineeName} has been nominated for "${category.name}" in your event "${event.title}".`,
+        type: "EVENT",
+        metadata: {
+          eventId: event._id,
+          nominationId: nomination._id
+        }
+      });
+    } catch (error) {
+       console.error('Failed to send organizer in-app notification:', error);
+    }
 
     return nomination;
   }
@@ -147,10 +198,27 @@ export class NominationService {
     if (query?.status && query.status !== 'ALL') filter.status = query.status;
 
     const nominations = await Nomination.find(filter)
-      .populate("eventId", "title eventCode nominationForm")
+      .populate("eventId", "title eventCode nominationForm categories")
       .sort({ createdAt: -1 });
 
-    return nominations;
+    return nominations.map((nom, idx) => {
+        const n = nom.toObject();
+        const eventData = n.eventId as any;
+        
+        // Resolve category name from the populated event categories
+        let categoryName = n.categoryName || "Unknown";
+        if (eventData && eventData.categories) {
+            const cat = eventData.categories.find((c: any) => c._id?.toString() === n.categoryId?.toString());
+            if (cat) categoryName = cat.name;
+        }
+
+        return {
+            ...n,
+            id: n._id.toString() || `nom-${idx}`,
+            event: eventData, // Standardize for frontend
+            categoryName: categoryName,
+        };
+    });
   }
 
   static async approveNomination(nominationId: string, organizerId: string) {
@@ -189,7 +257,7 @@ export class NominationService {
     const candidateCode = EventService.generateCandidateCode();
     const newCandidate = {
       name: nomination.nomineeName,
-      email: "",
+      email: nomination.email || "", // Match email from nomination
       phone: nomination.nomineePhone,
       imageUrl: nomination.photoUrl,
       description: nomination.bio,
@@ -203,17 +271,29 @@ export class NominationService {
     nomination.status = "APPROVED";
     await nomination.save();
     
-    // Send welcome SMS to the new candidate
+    // Send automated notifications
     try {
-      let message = `Hello ${nomination.nomineeName}! You've been approved as a candidate for "${event.title}" in the "${category.name}" category. Good luck!`;
-      
+      // 1. Send welcome SMS
+      let smsMessage = `Hello ${nomination.nomineeName}! You've been approved as a candidate for "${event.title}" in the "${category.name}" category. Good luck!`;
       if (event.whatsappGroupLink) {
-        message += ` Join the candidates' WhatsApp group: ${event.whatsappGroupLink}`;
+        smsMessage += ` Join the candidates' WhatsApp group: ${event.whatsappGroupLink}`;
       }
-      
-      await SMSService.sendCustomMessage(nomination.nomineePhone, message);
+      await SMSService.sendCustomMessage(nomination.nomineePhone, smsMessage);
+
+      // 2. Send branded approval email
+      if (nomination.email) {
+        await EmailService.sendNominationOutcomeEmail({
+          to: nomination.email,
+          nomineeName: nomination.nomineeName,
+          eventTitle: event.title,
+          categoryName: category.name,
+          status: "APPROVED",
+          candidateCode: candidateCode,
+          whatsappLink: event.whatsappGroupLink
+        });
+      }
     } catch (error) {
-      console.error('Failed to send candidate welcome SMS:', error);
+      console.error('Failed to send nomination approval notifications:', error);
     }
 
     return { message: "Nomination approved and candidate created", nomination };
@@ -240,6 +320,21 @@ export class NominationService {
 
     nomination.status = "REJECTED";
     await nomination.save();
+
+    // Send branded rejection email
+    try {
+      if (nomination.email) {
+        await EmailService.sendNominationOutcomeEmail({
+            to: nomination.email,
+            nomineeName: nomination.nomineeName,
+            eventTitle: event.title,
+            categoryName: category.name,
+            status: "REJECTED"
+        });
+      }
+    } catch (error) {
+      console.error('Failed to send nomination rejection email:', error);
+    }
 
     return { message: "Nomination rejected", nomination };
   }

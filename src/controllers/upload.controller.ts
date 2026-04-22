@@ -15,6 +15,19 @@ export const uploadImage = asyncHandler(async (req: Request, res: Response) => {
   res.json(result);
 });
 
+export const uploadPublicImage = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.file) {
+    return res.status(400).json({ message: "No file uploaded" });
+  }
+
+  const result = await UploadService.uploadImage(req.file, {
+    folder: req.body.folder || "public",
+    userId: "guest"
+  });
+
+  res.json(result);
+});
+
 export const deleteImage = asyncHandler(async (req: Request, res: Response) => {
   const { publicId } = req.body;
   

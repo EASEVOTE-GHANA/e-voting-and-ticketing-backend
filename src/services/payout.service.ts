@@ -6,6 +6,7 @@ import { Settings } from "../models/Settings.model";
 import { AppError } from "../middleware/error.middleware";
 import { PaginationHelper } from "../utils/pagination.util";
 import { ReconciliationService } from "./reconciliation.service";
+import { AnalyticsService } from "./analytics.service";
 
 export class PayoutService {
   /**
@@ -29,40 +30,10 @@ export class PayoutService {
       };
     }
 
-    console.log(`[PayoutService] Calculating balance for Organizer: ${organizerId}. Found ${eventIds.length} events.`);
-
-    // 2. Sum gross revenue from PAID purchases using a robust aggregation
-    // We match both ObjectId and String forms of eventId to be resistant to DB type inconsistencies
-    const enhancedEventIds = [
-      ...eventIds,
-      ...eventIds.map(id => id.toString())
-    ];
-
-    const purchaseStats = await Purchase.aggregate([
-      { 
-        $match: { 
-          eventId: { $in: enhancedEventIds }, 
-          // Match "PAID", "SUCCESSFUL", or "COMPLETED" case-insensitively
-          status: { $regex: /^(paid|successful|completed)$/i }
-        } 
-      },
-      { 
-        $group: { 
-          _id: null, 
-          total: { $sum: { $convert: { input: "$amount", to: "double", onError: 0, onNull: 0 } } } 
-        } 
-      }
-    ]);
-    
-    console.log(`[PayoutService] Purchase aggregation result:`, JSON.stringify(purchaseStats));
-    const grossRevenue = purchaseStats[0]?.total || 0;
-
-    // 3. Get platform commission rate (Global setting)
-    const commissionSetting = await Settings.findOne({ key: "platform_commission" });
-    const commissionRate = commissionSetting ? parseFloat(commissionSetting.value) : 10;
-    
-    // 4. Calculate total organizer net share
-    const organizerNetShare = grossRevenue * (1 - commissionRate / 100);
+    const pulse = await AnalyticsService.getOrganizerPulse(organizerId);
+    const grossRevenue = pulse.grossRevenue || 0;
+    const organizerNetShare = pulse.totalRevenue || 0;
+    const commissionRate = pulse.commissionRate || 10;
 
     // 4b. Find any "unverified" revenue (gaps between cached stats and ledger)
     const gaps = await ReconciliationService.getOrganizerGaps(organizerId);

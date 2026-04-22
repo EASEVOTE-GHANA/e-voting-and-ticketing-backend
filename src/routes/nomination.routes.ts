@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate } from "../middleware/auth.middleware";
+import { authenticate, optionalAuthenticate } from "../middleware/auth.middleware";
 import { requireRole } from "../middleware/role.middleware";
 import {
   createNominationForm,
@@ -13,8 +13,8 @@ import {
 
 const router = Router();
 
-// Public routes
-router.get("/events/:eventId/form", getNominationForm);
+// Public routes (with optional auth for organizers)
+router.get("/events/:eventId/form", optionalAuthenticate, getNominationForm);
 router.post("/events/:eventId/submit", submitNomination);
 
 // Organizer routes

@@ -168,7 +168,7 @@ export const suspendEvent = asyncHandler(async (req: Request, res: Response) => 
 
 export const resumeEvent = asyncHandler(async (req: Request, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const event = await EventService.resumeEvent(id, req.user!.id, req.user!.role);
+  const event = await EventService.resumeEvent(id, req.user!.role, req.user!.id);
   res.json(event);
 });
 

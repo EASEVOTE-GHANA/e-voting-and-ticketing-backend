@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { User } from "../models/User.model";
 import { Event } from "../models/Event.model";
 import { Purchase } from "../models/Purchase.model";
@@ -164,22 +165,35 @@ export class AnalyticsService {
     try {
       if (!organizerId) return { totalRevenue: 0, grossRevenue: 0, totalVotes: 0, totalTickets: 0, revenueTrend: [], topEvents: [] };
 
-      const mongoose = require("mongoose");
       const orgObjectId = new mongoose.Types.ObjectId(organizerId);
+
+      // 1. Get all events owned by organizer to define the scope (Robust Lookup)
+      const events = await Event.find({ organizerId: orgObjectId, isDeleted: false }, "_id");
+      const eventIds = events.map(e => e._id);
+      const enhancedEventIds = [...eventIds, ...eventIds.map(id => id.toString())];
+
+      if (eventIds.length === 0) {
+        return { totalRevenue: 0, grossRevenue: 0, totalVotes: 0, totalTickets: 0, revenueTrend: [], topEvents: [] };
+      }
 
       const sixMonthsAgo = new Date();
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
       sixMonthsAgo.setDate(1);
       sixMonthsAgo.setHours(0, 0, 0, 0);
 
-      const [ledgerData, trendData, topEventsData] = await Promise.all([
+      const [ledgerData, trendData, topEventsData, commissionSetting] = await Promise.all([
         // 1. Ledger Aggregation
         Purchase.aggregate([
-          { $match: { organizerId: orgObjectId, status: "PAID" } },
+          { 
+            $match: { 
+                eventId: { $in: enhancedEventIds }, 
+                status: { $regex: /^(paid|successful|completed)$/i } 
+            } 
+          },
           { 
             $group: { 
               _id: null, 
-              totalVolume: { $sum: "$amount" },
+              totalVolume: { $sum: { $convert: { input: "$amount", to: "double", onError: 0, onNull: 0 } } },
               totalVotes: { $sum: { $ifNull: ["$voteCount", 0] } },
               totalTickets: { $sum: { $ifNull: ["$ticketQuantity", 0] } }
             } 
@@ -189,8 +203,8 @@ export class AnalyticsService {
         Purchase.aggregate([
           { 
             $match: { 
-              organizerId: orgObjectId,
-              status: "PAID",
+              eventId: { $in: enhancedEventIds },
+              status: { $regex: /^(paid|successful|completed)$/i },
               createdAt: { $gte: sixMonthsAgo }
             } 
           },
@@ -200,18 +214,23 @@ export class AnalyticsService {
                 year: { $year: "$createdAt" },
                 month: { $month: "$createdAt" }
               },
-              revenue: { $sum: "$amount" }
+              revenue: { $sum: { $convert: { input: "$amount", to: "double", onError: 0, onNull: 0 } } }
             }
           },
           { $sort: { "_id.year": 1, "_id.month": 1 } }
         ]),
         // 3. Top Events for this Organizer
         Purchase.aggregate([
-          { $match: { organizerId: orgObjectId, status: "PAID" } },
+          { 
+            $match: { 
+                eventId: { $in: enhancedEventIds }, 
+                status: { $regex: /^(paid|successful|completed)$/i } 
+            } 
+          },
           { 
             $group: { 
               _id: "$eventId", 
-              revenue: { $sum: "$amount" },
+              revenue: { $sum: { $convert: { input: "$amount", to: "double", onError: 0, onNull: 0 } } },
               votes: { $sum: { $ifNull: ["$voteCount", 0] } },
               tickets: { $sum: { $ifNull: ["$ticketQuantity", 0] } }
             } 
@@ -227,12 +246,11 @@ export class AnalyticsService {
             }
           },
           { $unwind: { path: "$eventDetails", preserveNullAndEmptyArrays: true } }
-        ])
+        ]),
+        Settings.findOne({ key: "platform_commission" })
       ]);
 
       const ledger = ledgerData[0] || { totalVolume: 0, totalVotes: 0, totalTickets: 0 };
-      
-      const commissionSetting = await Settings.findOne({ key: "platform_commission" });
       const commissionRate = commissionSetting ? parseFloat(commissionSetting.value) : 10;
       const netRevenue = ledger.totalVolume * (1 - commissionRate / 100);
 
@@ -243,7 +261,7 @@ export class AnalyticsService {
       })).filter(t => t.name !== "N/A");
 
       const topEvents = topEventsData
-        .filter((e: any) => e.eventDetails) // Filter out deleted events from the ledger stats
+        .filter((e: any) => e.eventDetails)
         .map((e: any) => ({
           id: e._id,
           title: e.eventDetails.title,
@@ -255,10 +273,11 @@ export class AnalyticsService {
         }));
 
       return {
-        totalRevenue: netRevenue,
+        totalRevenue: netRevenue, // Net share
         grossRevenue: ledger.totalVolume,
         totalVotes: ledger.totalVotes,
         totalTickets: ledger.totalTickets,
+        commissionRate,
         revenueTrend,
         topEvents
       };
