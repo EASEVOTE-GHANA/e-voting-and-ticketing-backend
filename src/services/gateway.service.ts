@@ -11,10 +11,8 @@ export class GatewayService {
 
     const defaults = [
       { provider: "paystack", type: "WEB", isPrimary: true },
-      { provider: "flutterwave", type: "WEB", isPrimary: false },
       { provider: "appsmobile", type: "WEB", isPrimary: false },
       { provider: "appsmobile", type: "USSD", isPrimary: true },
-      { provider: "paystack", type: "USSD", isPrimary: false },
     ];
 
     await Gateway.insertMany(defaults);
