@@ -3,7 +3,6 @@ import { Event } from "../models/Event.model";
 import { ITicket, Ticket } from "../models/Ticket.model";
 import { Settings } from "../models/Settings.model";
 import { PaystackService } from "./paystack.service";
-import { FlutterwaveService } from "./flutterwave.service";
 import { AppsMobileService } from "./appsmobile.service";
 import { AppError } from "../middleware/error.middleware";
 import { PaginationHelper } from "../utils/pagination.util";
@@ -16,7 +15,7 @@ import { IPurchase } from "../models/Purchase.model";
 import { IPaymentGateway, PaymentVerificationResult } from "../payment-gateway.interface";
 import mongoose, { HydratedDocument } from "mongoose";
 
-type PaymentGateway = 'paystack' | 'flutterwave' | 'appsmobile';
+type PaymentGateway = 'paystack' | 'appsmobile';
 
 export class PurchaseService {
   private static async getDefaultGateway(): Promise<PaymentGateway> {
@@ -27,8 +26,6 @@ export class PurchaseService {
     switch (gateway) {
       case 'paystack':
         return new PaystackService();
-      case 'flutterwave':
-        return new FlutterwaveService();
       case 'appsmobile':
         return new AppsMobileService();
       default:
@@ -494,6 +491,8 @@ export class PurchaseService {
     event.totalRevenue = (event.totalRevenue || 0) + purchase.amount;
     event.totalPaidVotes = (event.totalPaidVotes || 0) + purchase.voteCount!;
     
+    // Ensure nesting changes are saved
+    event.markModified('categories');
     await event.save();
   }
 
@@ -543,8 +542,6 @@ export class PurchaseService {
     // Simple gateway detection based on headers
     if (req.headers['x-paystack-signature']) {
       gateway = 'paystack';
-    } else if (req.headers['verif-hash']) {
-      gateway = 'flutterwave';
     } else if (req.body.trans_status) {
       gateway = 'appsmobile';
     }

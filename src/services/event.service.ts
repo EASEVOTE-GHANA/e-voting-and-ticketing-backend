@@ -263,7 +263,11 @@ export class EventService {
     }
     
     // Filter response based on event type and settings
-    return this.filterEventResponse(event, userId, userRole);
+    const filteredEvent = this.filterEventResponse(event, userId, userRole);
+    
+    // Decorate with live ledger stats to eliminate cached/sync issues
+    const eventsWithStats = await this.appendLedgerStats([filteredEvent]);
+    return eventsWithStats[0];
   }
 
   static async getEvents(filters: any = {}, userRole?: string, userId?: string, query?: any) {
@@ -305,7 +309,10 @@ export class EventService {
     // Filter response based on event type and apply vote display rules
     const filteredEvents = events.map(event => this.filterEventResponse(event, userId, userRole));
 
-    return PaginationHelper.formatResponse(filteredEvents, total, page, limit);
+    // Decorate with live ledger stats to eliminate cached/sync issues
+    const decoratedEvents = await this.appendLedgerStats(filteredEvents);
+
+    return PaginationHelper.formatResponse(decoratedEvents, total, page, limit);
   }
 
   static async getMyEvents(userId: string, filters: any = {}, query?: any) {
@@ -723,17 +730,70 @@ export class EventService {
       }
     ]);
 
+    // 1.5 Aggregate candidate-level votes for VOTING events
+    const candidateAgg = await Purchase.aggregate([
+      { 
+        $match: { 
+          eventId: { $in: eventIds }, 
+          type: "VOTE",
+          status: { $regex: /paid|successful|completed/i }
+        } 
+      },
+      { 
+        $group: { 
+          _id: { eventId: "$eventId", candidateId: "$candidateId" },
+          votes: { $sum: { $ifNull: ["$voteCount", 0] } }
+        } 
+      }
+    ]);
+
     // 2. Map stats back to events
     return filteredEvents.map(event => {
       const eventIdStr = (event._id || event.id).toString();
+      
+      // Top-level ledger stats
       const ledger = stats.find(s => s._id.toString() === eventIdStr) || {
         totalRevenue: 0,
         totalVotes: 0,
         totalTickets: 0
       };
 
+      // Enrich categories and candidates if present
+      let enrichedCategories = event.categories || [];
+      if (event.type === "VOTING" || event.type === "HYBRID") {
+        enrichedCategories = enrichedCategories.map((category: any) => {
+          let categoryTotalVotes = 0;
+          let maxVotes = 0;
+          const candidates = (category.candidates || []).map((candidate: any) => {
+            const candidateIdStr = (candidate._id || candidate.id)?.toString();
+            const realVotes = candidateAgg.find(
+              c => c._id.eventId.toString() === eventIdStr && 
+                   c._id.candidateId.toString() === candidateIdStr
+            )?.votes || 0;
+            
+            categoryTotalVotes += realVotes;
+            if (realVotes > maxVotes) maxVotes = realVotes;
+            
+            return {
+              ...candidate,
+              votes: realVotes,
+              voteCount: realVotes // For frontend compatibility
+            };
+          });
+
+          return {
+            ...category,
+            candidates,
+            votes: categoryTotalVotes,
+            totalVotes: categoryTotalVotes,
+            maxVotes: maxVotes
+          };
+        });
+      }
+
       return {
         ...event,
+        categories: enrichedCategories,
         ledgerStats: {
           revenue: ledger.totalRevenue,
           votes: ledger.totalVotes,
