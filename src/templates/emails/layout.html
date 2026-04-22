@@ -1,0 +1,160 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EaseVote Notification</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style type="text/css">
+    body {
+      margin: 0;
+      padding: 0;
+      min-width: 100%;
+      background-color: #fcfaff;
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+    table {
+      border-spacing: 0;
+      font-family: 'Outfit', sans-serif;
+      color: #171717;
+    }
+    td {
+      padding: 0;
+    }
+    img {
+      border: 0;
+    }
+    .wrapper {
+      width: 100%;
+      table-layout: fixed;
+      background-color: #fcfaff;
+      padding-bottom: 60px;
+    }
+    .webkit {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 10px 40px rgba(91, 0, 88, 0.05);
+    }
+    .outer {
+      margin: 0 auto;
+      width: 100%;
+      max-width: 600px;
+      border-spacing: 0;
+      color: #171717;
+    }
+    .header {
+      background-color: #ffffff;
+      padding: 50px 30px;
+      text-align: center;
+    }
+    .content {
+      padding: 40px 40px;
+      background-color: #ffffff;
+    }
+    .footer {
+      padding: 40px 30px;
+      text-align: center;
+      font-size: 13px;
+      color: #737373;
+      background-color: #ffffff;
+      border-top: 1px solid #f8f0f8;
+    }
+    .h1 {
+      font-size: 32px;
+      font-weight: 800;
+      color: #5b0058;
+      margin: 0 0 24px 0;
+      letter-spacing: -0.04em;
+      line-height: 1.2;
+    }
+    .button {
+      display: inline-block;
+      padding: 18px 40px;
+      background-color: #5b0058;
+      color: #ffffff !important;
+      text-decoration: none;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 16px;
+      box-shadow: 0 10px 20px rgba(91, 0, 88, 0.15);
+    }
+    .card {
+      background-color: #ffffff;
+      border: 1px solid #f8f0f8;
+      border-radius: 16px;
+      padding: 30px;
+      margin-bottom: 30px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 10px 20px;
+      background-color: #fcfaff;
+      color: #5b0058;
+      border-radius: 10px;
+      font-weight: 800;
+      font-size: 28px;
+      letter-spacing: 3px;
+    }
+    .icon-text {
+      vertical-align: middle;
+      font-size: 15px;
+      color: #5b0058;
+      margin-bottom: 10px;
+      font-weight: 500;
+    }
+    .icon {
+      width: 18px;
+      height: 18px;
+      margin-right: 12px;
+      vertical-align: middle;
+    }
+    @media screen and (max-width: 600px) {
+      .content {
+        padding: 30px 25px !important;
+      }
+      .webkit {
+        border-radius: 0 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div style="height: 40px;">&nbsp;</div>
+    <div class="webkit">
+      <table class="outer" align="center">
+        <!-- Header (Clean White) -->
+        <tr>
+          <td class="header">
+            <a href="https://www.easevotegh.com" target="_blank" style="text-decoration: none;">
+              <img src="https://www.easevotegh.com/img/EaseVote_named.png" alt="EaseVote Logo" width="240" style="display: block; margin: 0 auto;" />
+            </a>
+          </td>
+        </tr>
+
+        <!-- Main Content -->
+        <tr>
+          <td class="content">
+            {{content}}
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td class="footer">
+            <p style="margin: 0 0 12px 0; font-weight: 700; color: #5b0058; font-size: 14px;">&copy; {{year}} EaseVote Ghana</p>
+            <p style="margin: 0; line-height: 1.8;">The next generation of digital voting and ticketing.<br />Empowering choice, ensuring integrity.</p>
+            <div style="margin-top: 30px;">
+              <a href="https://www.easevotegh.com" style="color: #5b0058; text-decoration: none; margin: 0 15px; font-weight: 700;">Website</a>
+              <a href="mailto:support@easevotegh.com" style="color: #5b0058; text-decoration: none; margin: 0 15px; font-weight: 700;">Support</a>
+            </div>
+          </td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</body>
+</html>
