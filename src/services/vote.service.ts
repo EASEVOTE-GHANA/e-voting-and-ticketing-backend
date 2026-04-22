@@ -1,6 +1,8 @@
+import { Purchase } from "../models/Purchase.model";
 import { Event } from "../models/Event.model";
 import { AppError } from "../middleware/error.middleware";
 import { PurchaseService } from "./purchase.service";
+import mongoose from "mongoose";
 
 export class VoteService {
   static async initiateVote(eventId: string, candidateCode: string, voteCount: number, customerEmail: string, customerName?: string, customerPhone?: string) {
@@ -57,13 +59,38 @@ export class VoteService {
       throw new AppError("Event not found", 404);
     }
 
+    // Aggregate real-time votes from PAID purchases
+    const voteAgg = await Purchase.aggregate([
+      { 
+        $match: { 
+          eventId: new mongoose.Types.ObjectId(eventId),
+          status: "PAID",
+          type: "VOTE"
+        } 
+      },
+      { 
+        $group: { 
+          _id: "$candidateId", 
+          totalVotes: { $sum: "$voteCount" } 
+        } 
+      }
+    ]);
+
+    const voteMap = new Map(voteAgg.map(v => [v._id.toString(), v.totalVotes]));
+
     const categories = event.categories?.map(category => {
-      let candidates = category.candidates.map(candidate => ({
-        id: candidate._id,
-        name: candidate.name,
-        code: candidate.code,
-        voteCount: event.liveResults ? (candidate.votes || 0) : undefined
-      }));
+      let candidates = category.candidates.map(candidate => {
+        const candidateIdStr = candidate._id?.toString() || "";
+        const realVotes = voteMap.get(candidateIdStr) || 0;
+        
+        return {
+          id: candidate._id,
+          name: candidate.name,
+          code: candidate.code,
+          imageUrl: candidate.imageUrl,
+          voteCount: event.liveResults ? realVotes : undefined
+        };
+      });
 
       // Sort by votes for ranking
       candidates.sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0));
@@ -75,9 +102,12 @@ export class VoteService {
         voteCount: event.showVoteCount ? candidate.voteCount : undefined
       }));
 
+      const categoryTotalVotes = candidates.reduce((sum, c) => sum + (c.voteCount || 0), 0);
+
       return {
         id: category._id,
         name: category.name,
+        totalVotes: event.showVoteCount ? categoryTotalVotes : undefined,
         candidates
       };
     }) || [];

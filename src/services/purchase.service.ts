@@ -494,6 +494,8 @@ export class PurchaseService {
     event.totalRevenue = (event.totalRevenue || 0) + purchase.amount;
     event.totalPaidVotes = (event.totalPaidVotes || 0) + purchase.voteCount!;
     
+    // Ensure nesting changes are saved
+    event.markModified('categories');
     await event.save();
   }
 
