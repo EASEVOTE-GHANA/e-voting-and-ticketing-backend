@@ -206,7 +206,7 @@ export class NominationService {
         const eventData = n.eventId as any;
         
         // Resolve category name from the populated event categories
-        let categoryName = n.categoryName || "Unknown";
+        let categoryName = "Unknown";
         if (eventData && eventData.categories) {
             const cat = eventData.categories.find((c: any) => c._id?.toString() === n.categoryId?.toString());
             if (cat) categoryName = cat.name;
@@ -323,12 +323,15 @@ export class NominationService {
 
     // Send branded rejection email
     try {
+      const category = event.categories?.find(cat => cat._id?.toString() === nomination.categoryId.toString());
+      const categoryName = category ? category.name : "Unknown";
+
       if (nomination.email) {
         await EmailService.sendNominationOutcomeEmail({
             to: nomination.email,
             nomineeName: nomination.nomineeName,
             eventTitle: event.title,
-            categoryName: category.name,
+            categoryName: categoryName,
             status: "REJECTED"
         });
       }
