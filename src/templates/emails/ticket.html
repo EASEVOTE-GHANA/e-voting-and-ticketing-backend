@@ -1,0 +1,38 @@
+<div class="h1">Order Confirmed</div>
+<p style="font-size: 18px; line-height: 28px; margin: 0 0 24px 0; color: #495057;">Hi {{customerName}}, thank you for your purchase. Your payment was successful and your official tickets are ready.</p>
+
+<!-- Hero Section with Background Image -->
+<table width="100%" cellpadding="0" cellspacing="0" style="background-image: url('{{eventImage}}'); background-size: cover; background-position: center; border-radius: 20px; overflow: hidden; margin-bottom: 40px;">
+  <tr>
+    <td style="background-color: rgba(91, 0, 88, 0.85); padding: 50px 40px;">
+      <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: 800; color: rgba(255, 255, 255, 0.7); text-transform: uppercase; letter-spacing: 2px;">SECURE ENTRY GRANTED</p>
+      <div style="font-size: 28px; font-weight: 800; color: #ffffff; margin: 0 0 25px 0; line-height: 1.2;">{{eventTitle}}</div>
+      
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="font-size: 15px; color: #ffffff; line-height: 26px;">
+            <div class="icon-text" style="color: #ffffff;">
+              <img src="https://img.icons8.com/m_sharp/48/FFFFFF/calendar.png" width="16" height="16" style="vertical-align: middle; margin-right: 10px;" />
+              {{eventDate}}
+            </div>
+            <div class="icon-text" style="color: #ffffff;">
+              <img src="https://img.icons8.com/m_sharp/48/FFFFFF/marker.png" width="16" height="16" style="vertical-align: middle; margin-right: 10px;" />
+              {{venue}}
+            </div>
+          </td>
+          <td align="right" style="vertical-align: bottom;">
+            <div style="font-size: 14px; color: rgba(255, 255, 255, 0.8);">Ref: <span style="font-weight: 700; color: #ffffff;">{{reference}}</span></div>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+<div class="card" style="text-align: center; background-color: #fcfaff; border: 2px dashed #fbd5eb; padding: 40px 30px;">
+  <img src="https://img.icons8.com/m_sharp/200/5b0058/file.png" width="48" height="48" style="margin-bottom: 20px;" />
+  <p style="font-size: 16px; line-height: 26px; color: #5b0058; font-weight: 700; margin: 0 0 10px 0;">Attached PDF Tickets</p>
+  <p style="font-size: 15px; line-height: 24px; color: #737373; margin: 0;">We've attached your official tickets as a PDF file to this email. You can download and print them, or show the QR codes from your mobile device upon arrival.</p>
+</div>
+
+<p style="font-size: 15px; line-height: 24px; margin: 30px 0 0 0; color: #495057;">Need any assistance? Reply to this email or visit our <a href="https://www.easevotegh.com" style="color: #5b0058; font-weight: 700; text-decoration: none;">support portal</a>.</p>

@@ -36,11 +36,11 @@ export class PurchaseService {
     }
   }
   static generateReference(): string {
-    return `EV_${Date.now()}_${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
+    return `EV_${crypto.randomBytes(8).toString("hex").toUpperCase()}`;
   }
 
   static generateTicketNumber(): string {
-    return `TK${Date.now()}${crypto.randomBytes(2).toString("hex").toUpperCase()}`;
+    return `TK-${crypto.randomBytes(5).toString("hex").toUpperCase()}`;
   }
 
   static async initializeTicketPurchase(data: any) {
