@@ -24,7 +24,7 @@ export const getEvent = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const getEvents = asyncHandler(async (req: Request, res: Response) => {
-  const events = await EventService.getEvents(req.query);
+  const events = await EventService.getEvents(req.query, undefined, undefined, req.query);
   res.json(events);
 });
 
