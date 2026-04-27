@@ -752,7 +752,7 @@ export class EventService {
       const eventIdStr = (event._id || event.id).toString();
       
       // Top-level ledger stats
-      const ledger = stats.find(s => s._id.toString() === eventIdStr) || {
+      const ledger = stats.find(s => s._id?.toString() === eventIdStr) || {
         totalRevenue: 0,
         totalVotes: 0,
         totalTickets: 0
@@ -767,8 +767,8 @@ export class EventService {
           const candidates = (category.candidates || []).map((candidate: any) => {
             const candidateIdStr = (candidate._id || candidate.id)?.toString();
             const realVotes = candidateAgg.find(
-              c => c._id.eventId.toString() === eventIdStr && 
-                   c._id.candidateId.toString() === candidateIdStr
+              c => c._id?.eventId?.toString() === eventIdStr && 
+                   c._id?.candidateId?.toString() === candidateIdStr
             )?.votes || 0;
             
             categoryTotalVotes += realVotes;
