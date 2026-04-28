@@ -222,12 +222,16 @@ export class EventService {
       'title', 'description', 'startDate', 'endDate', 'venue', 'isPublic',
       'costPerVote', 'minVotesPerPurchase', 'maxVotesPerPurchase', 'allowPublicNominations',
       'whatsappGroupLink', 'votingStartTime', 'votingEndTime', 'votingStartDate', 'votingEndDate',
-      'imageUrl', 'imagePublicId', 'categories', 'ticketTypes'
+      'imageUrl', 'imagePublicId', 'categories', 'ticketTypes', 'commissionRate'
     ];
     
     const filteredData: any = {};
     for (const field of allowedFields) {
       if (updateData[field] !== undefined) {
+        // Special restriction: commissionRate can only be set by admins
+        if (field === 'commissionRate' && !isAdmin) {
+          continue;
+        }
         filteredData[field] = updateData[field];
       }
     }
