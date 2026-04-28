@@ -32,6 +32,8 @@ import {
   suspendEvent,
   resumeEvent,
   getOrganizerStats,
+  permanentDeleteEvent,
+  setEventCommission,
 } from "../controllers/event.controller";
 
 const router = Router();
@@ -67,7 +69,9 @@ router.patch("/:id/toggle-vote-count", authenticate, requireRole(["ORGANIZER", "
 router.get("/admin/all", authenticate, requireRole(["ADMIN", "SUPER_ADMIN"]), getAllEventsForAdmin);
 router.get("/admin/deleted", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"]), getDeletedEvents);
 router.post("/:id/restore", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"]), restoreEvent);
+router.delete("/:id/permanent", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"]), permanentDeleteEvent);
 router.patch("/:id/approve", authenticate, requireRole(["ADMIN", "SUPER_ADMIN"]), approveEvent);
+router.patch("/:id/commission", authenticate, requireRole(["ADMIN", "SUPER_ADMIN"]), setEventCommission);
 router.patch("/:id/suspend", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"]), suspendEvent);
 router.patch("/:id/resume", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"]), resumeEvent);
 

@@ -38,3 +38,8 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
   const result = await UserService.deleteUser(id, req.user!.role);
   res.json(result);
 });
+export const permanentDeleteUser = asyncHandler(async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const result = await UserService.permanentDeleteUser(id, req.user!.role);
+  res.json(result);
+});

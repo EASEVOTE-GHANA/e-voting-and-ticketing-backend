@@ -11,12 +11,35 @@ import crypto from "crypto";
 import mongoose from "mongoose";
 
 export class EventService {
-  static generateEventCode(): string {
-    return crypto.randomBytes(3).toString("hex").toUpperCase();
+  static async generateEventCode(): Promise<string> {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // Excludes I and O because they could be confused with 0 and 1
+    let code = '';
+    let isUnique = false;
+    let attempts = 0;
+
+    while (!isUnique && attempts < 1000) {
+      code = '';
+      for (let i = 0; i < 2; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+
+      const existingEvent = await Event.findOne({ eventCode: code });
+      if (!existingEvent) {
+        isUnique = true;
+      }
+      attempts++;
+    }
+
+    if (!isUnique) {
+      throw new AppError("Could not generate a unique 2-character event code. The namespace might be full.", 500);
+    }
+
+    return code;
   }
 
-  static generateCandidateCode(): string {
-    return crypto.randomBytes(2).toString("hex").toUpperCase();
+
+  static generateCandidateCode(eventCode: string, nextNumber: number): string {
+    return `${eventCode}${nextNumber}`;
   }
 
   static filterEventResponse(event: any, userId?: string, userRole?: string) {
@@ -97,7 +120,7 @@ export class EventService {
   }
 
   static async createEvent(eventData: any, currentUserId: string, currentUserRole: string) {
-    const eventCode = this.generateEventCode();
+    const eventCode = await this.generateEventCode();
     
     // Determine organizerId based on user role
     let organizerId = currentUserId;
@@ -390,6 +413,36 @@ export class EventService {
     await event.save();
 
     return event;
+  }
+
+  static async permanentDeleteEvent(eventId: string, userId: string, userRole: string) {
+    const event = await Event.findById(eventId);
+    if (!event) {
+      throw new AppError("Event not found", 404);
+    }
+
+    // Permission check: Must be owner or admin/super_admin
+    const isOwner = event.organizerId.toString() === userId;
+    const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(userRole);
+    const isSuperAdmin = userRole === "SUPER_ADMIN";
+
+    if (!isAdmin && !isOwner) {
+      throw new AppError("Unauthorized to permanently delete this event", 403);
+    }
+
+    // Safety check: Only allow permanent deletion of deleted events or drafts
+    if (!isSuperAdmin && !event.isDeleted && event.status !== "DRAFT") {
+      throw new AppError("Only draft or already soft-deleted events can be permanently deleted", 400);
+    }
+
+    // Additional safety: Check for revenue if it's not a super admin
+    if (!isSuperAdmin && event.totalRevenue > 0) {
+      throw new AppError("Cannot permanently delete an event with existing sales", 400);
+    }
+
+    await Event.findByIdAndDelete(eventId);
+
+    return { message: "Event permanently deleted" };
   }
 
   static async getDeletedEvents(userRole: string, userId: string) {
@@ -801,5 +854,29 @@ export class EventService {
         }
       };
     });
+  }
+
+  static async setEventCommission(eventId: string, commissionRate: number, userRole: string) {
+    if (!["ADMIN", "SUPER_ADMIN"].includes(userRole)) {
+      throw new AppError("Unauthorized: Only admins can set custom commission rates", 403);
+    }
+
+    if (commissionRate < 0 || commissionRate > 100) {
+      throw new AppError("Commission rate must be between 0 and 100", 400);
+    }
+
+    const event = await Event.findById(eventId);
+    if (!event) {
+      throw new AppError("Event not found", 404);
+    }
+
+    event.commissionRate = commissionRate;
+    await event.save();
+
+    return { 
+      message: "Event commission rate updated successfully",
+      eventId,
+      commissionRate 
+    };
   }
 }

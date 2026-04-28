@@ -4,13 +4,18 @@ import { asyncHandler } from "../middleware/error.middleware";
 
 export const getOrganizerBalance = asyncHandler(async (req: Request, res: Response) => {
   const userId = (req as any).user.id;
-  const balance = await PayoutService.getOrganizerBalance(userId);
+  const eventId = req.query.eventId as string;
+  const balance = await PayoutService.getOrganizerBalance(userId, eventId);
   res.json({ data: balance });
 });
 
 export const requestPayout = asyncHandler(async (req: Request, res: Response) => {
   const userId = (req as any).user.id;
-  const payout = await PayoutService.requestPayout(userId, req.body);
+  const payout = await PayoutService.requestPayout(userId, {
+    amount: req.body.amount,
+    eventId: req.body.eventId,
+    paymentDetails: req.body.paymentDetails
+  });
   res.status(201).json({ data: payout });
 });
 

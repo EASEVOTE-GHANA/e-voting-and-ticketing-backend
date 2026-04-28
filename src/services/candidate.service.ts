@@ -5,18 +5,15 @@ import { SMSService } from "./sms.service";
 import crypto from "crypto";
 
 export class CandidateService {
-  static generateCandidateCode(): string {
-    return crypto.randomBytes(2).toString("hex").toUpperCase();
-  }
 
   static async sendCandidateWelcomeSMS(candidateName: string, candidatePhone: string, eventTitle: string, categoryName: string, whatsappGroupLink?: string) {
     try {
       let message = `Hello ${candidateName}! You've been added as a candidate for "${eventTitle}" in the "${categoryName}" category. Good luck!`;
-      
+
       if (whatsappGroupLink) {
         message += ` Join the candidates' WhatsApp group: ${whatsappGroupLink}`;
       }
-      
+
       await SMSService.sendCustomMessage(candidatePhone, message);
     } catch (error) {
       console.error('Failed to send candidate welcome SMS:', error);
@@ -41,16 +38,17 @@ export class CandidateService {
       throw new AppError("Category not found", 404);
     }
 
-    const candidateCode = this.generateCandidateCode();
+    const totalCandidates = event.categories?.reduce((acc, cat) => acc + (cat.candidates?.length || 0), 0) || 0;
+    const candidateCode = EventService.generateCandidateCode(event.eventCode, totalCandidates + 1);
     const { code: _ignored, ...safeData } = candidateData;
     const newCandidate = {
       ...safeData,
       code: candidateCode
     };
-    
+
     category.candidates.push(newCandidate);
     await event.save();
-    
+
     // Send welcome SMS to candidate
     if (candidateData.phone) {
       await this.sendCandidateWelcomeSMS(
@@ -60,6 +58,24 @@ export class CandidateService {
         category.name,
         event.whatsappGroupLink
       );
+    }
+
+    // Send welcome email to candidate
+    if (candidateData.email) {
+      try {
+        const { EmailService } = await import("./email.service");
+        await EmailService.sendNominationOutcomeEmail({
+          to: candidateData.email,
+          nomineeName: candidateData.name,
+          eventTitle: event.title,
+          categoryName: category.name,
+          status: "APPROVED",
+          candidateCode: candidateCode,
+          whatsappLink: event.whatsappGroupLink
+        });
+      } catch (error) {
+        console.error('Failed to send candidate welcome email:', error);
+      }
     }
 
     return EventService.filterEventResponse(event, organizerId, undefined);
@@ -72,30 +88,30 @@ export class CandidateService {
     }
 
     const isPubliclyAccessible = ["PUBLISHED", "LIVE"].includes(event.status) && event.isPublic;
-    
+
     if (!isPubliclyAccessible) {
       if (!userId || !userRole) {
         throw new AppError("Authentication required", 401);
       }
-      
+
       const isOwner = event.organizerId.toString() === userId;
       const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(userRole);
-      
+
       if (!isOwner && !isAdmin) {
         throw new AppError("Access denied", 403);
       }
     }
-    
+
     // Apply vote display rules
     const filteredEvent = EventService.filterEventResponse(event);
-    
+
     for (const category of filteredEvent.categories || []) {
       const candidate = category.candidates.find((cand: any) => cand.code === candidateCode);
       if (candidate) {
         return candidate;
       }
     }
-    
+
     throw new AppError("Candidate not found", 404);
   }
 
@@ -107,7 +123,7 @@ export class CandidateService {
 
     const isOwner = event.organizerId.toString() === userId;
     const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(userRole);
-    
+
     if (!isOwner && !isAdmin) {
       throw new AppError("Access denied", 403);
     }
@@ -135,7 +151,7 @@ export class CandidateService {
 
     const isOwner = event.organizerId.toString() === userId;
     const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(userRole);
-    
+
     if (!isOwner && !isAdmin) {
       throw new AppError("Access denied", 403);
     }

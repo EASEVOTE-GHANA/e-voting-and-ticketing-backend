@@ -48,6 +48,12 @@ export const restoreEvent = asyncHandler(async (req: Request, res: Response) => 
   });
 });
 
+export const permanentDeleteEvent = asyncHandler(async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const result = await EventService.permanentDeleteEvent(id, req.user!.id, req.user!.role);
+  res.json(result);
+});
+
 export const submitForReview = asyncHandler(async (req: Request, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const event = await EventService.submitForReview(id, req.user!.id);
@@ -186,5 +192,11 @@ export const toggleLiveResults = asyncHandler(async (req: Request, res: Response
 export const toggleShowVoteCount = asyncHandler(async (req: Request, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const result = await EventService.toggleShowVoteCount(id, req.user!.id, req.user!.role);
+  res.json(result);
+});
+export const setEventCommission = asyncHandler(async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const { commissionRate } = req.body;
+  const result = await EventService.setEventCommission(id, commissionRate, req.user!.role);
   res.json(result);
 });
