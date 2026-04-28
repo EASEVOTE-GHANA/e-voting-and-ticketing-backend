@@ -8,42 +8,69 @@ import { PaginationHelper } from "../utils/pagination.util";
 import { ReconciliationService } from "./reconciliation.service";
 import { AnalyticsService } from "./analytics.service";
 
+export interface IPayoutBalance {
+  grossRevenue: number;
+  netRevenue: number;
+  totalWithdrawn: number;
+  availableBalance: number;
+  commissionRate?: number;
+  isCustomCommission?: boolean;
+  totalVotes?: number;
+  totalTickets?: number;
+  revenueTrend?: any[];
+  topEvents?: any[];
+}
+
 export class PayoutService {
   /**
-   * Calculates the current withdrawable balance for an organizer.
-   * Total Earnings (Gross) * (1 - Commission) - (Sum of Payouts [PENDING, PROCESSING, PAID])
+   * Calculates the current withdrawable balance for a specific event.
+   * Net Revenue (Gross * (1 - Commission)) - (Sum of Payouts for this event [PENDING, PROCESSING, PAID])
    */
-  static async getOrganizerBalance(organizerId: string) {
+  static async getOrganizerBalance(organizerId: string, eventId?: string): Promise<IPayoutBalance> {
     const orgId = new mongoose.Types.ObjectId(organizerId);
 
-    // 1. Get all events owned by organizer to define the scope
-    const events = await Event.find({ organizerId: orgId, isDeleted: false }, "_id");
-    const eventIds = events.map(e => e._id);
+    if (!eventId) {
+        // Global overview: Calculate total across all events
+        const pulse = await AnalyticsService.getOrganizerPulse(organizerId);
+        
+        // Sum all valid payouts across all events
+        const payoutStats = await Payout.aggregate([
+          { 
+            $match: { 
+              organizerId: orgId, 
+              status: { $in: ["PENDING", "PROCESSING", "PAID"] } 
+            } 
+          },
+          { 
+            $group: { 
+              _id: null, 
+              total: { $sum: "$amount" } 
+            } 
+          }
+        ]);
+        const totalWithdrawn = payoutStats[0]?.total || 0;
+        const availableBalance = Math.max(0, pulse.totalRevenue - totalWithdrawn);
 
-    if (eventIds.length === 0) {
-      return {
-        grossRevenue: 0,
-        netRevenue: 0,
-        totalWithdrawn: 0,
-        availableBalance: 0,
-        commissionRate: 10
-      };
+        return {
+          ...pulse,
+          netRevenue: pulse.totalRevenue,
+          totalWithdrawn,
+          availableBalance
+        };
     }
 
-    const pulse = await AnalyticsService.getOrganizerPulse(organizerId);
-    const grossRevenue = pulse.grossRevenue || 0;
-    const organizerNetShare = pulse.totalRevenue || 0;
-    const commissionRate = pulse.commissionRate || 10;
+    const evId = new mongoose.Types.ObjectId(eventId);
 
-    // 4b. Find any "unverified" revenue (gaps between cached stats and ledger)
-    const gaps = await ReconciliationService.getOrganizerGaps(organizerId);
-    const unverifiedRevenue = gaps.reduce((sum, g) => sum + g.gap, 0);
+    // 1. Get event details and stats
+    const eventStats = await AnalyticsService.getEventPulse(eventId);
+    const netRevenue = eventStats.netRevenue;
 
-    // 5. Sum all valid payouts
+    // 2. Sum all valid payouts for this specific event
     const payoutStats = await Payout.aggregate([
       { 
         $match: { 
           organizerId: orgId, 
+          eventId: evId,
           status: { $in: ["PENDING", "PROCESSING", "PAID"] } 
         } 
       },
@@ -56,34 +83,37 @@ export class PayoutService {
     ]);
     const totalWithdrawnAndPending = payoutStats[0]?.total || 0;
 
-    // 6. Final available balance
-    const availableBalance = Math.max(0, organizerNetShare - totalWithdrawnAndPending);
+    // 3. Final available balance for this event
+    const availableBalance = Math.max(0, netRevenue - totalWithdrawnAndPending);
 
     return {
-      grossRevenue,
-      netRevenue: organizerNetShare,
+      grossRevenue: eventStats.grossRevenue,
+      netRevenue: netRevenue,
       totalWithdrawn: totalWithdrawnAndPending,
-      availableBalance: Math.max(0, organizerNetShare - totalWithdrawnAndPending),
-      commissionRate,
-      unverifiedRevenue,
-      hasGaps: unverifiedRevenue > 0.01
+      availableBalance: availableBalance,
+      commissionRate: eventStats.commissionRate,
+      isCustomCommission: eventStats.isCustomCommission
     };
   }
 
   /**
-   * Organizer initiates a payout request.
+   * Organizer initiates a payout request for a specific event.
    */
-  static async requestPayout(organizerId: string, data: { amount: number; paymentDetails: any }) {
-    const { amount, paymentDetails } = data;
+  static async requestPayout(organizerId: string, data: { amount: number; eventId: string; paymentDetails: any }) {
+    const { amount, eventId, paymentDetails } = data;
+
+    if (!eventId) {
+      throw new AppError("eventId is required for payout requests", 400);
+    }
 
     if (amount <= 0) {
       throw new AppError("Payout amount must be greater than 0", 400);
     }
 
-    // Check balance
-    const { availableBalance } = await this.getOrganizerBalance(organizerId);
+    // Check balance for this specific event
+    const { availableBalance } = await this.getOrganizerBalance(organizerId, eventId);
     if (amount > availableBalance) {
-      throw new AppError(`Insufficient balance. Available: GHS ${availableBalance.toFixed(2)}`, 400);
+      throw new AppError(`Insufficient balance for this event. Available: GHS ${availableBalance.toFixed(2)}`, 400);
     }
 
     // Generate unique reference
@@ -93,6 +123,7 @@ export class PayoutService {
 
     const payout = await Payout.create({
       organizerId,
+      eventId: new mongoose.Types.ObjectId(eventId),
       amount,
       paymentDetails,
       reference,
@@ -111,9 +142,11 @@ export class PayoutService {
 
     const filter: any = { organizerId };
     if (status) filter.status = status;
+    if (query.eventId) filter.eventId = query.eventId;
 
     const [payouts, total] = await Promise.all([
       Payout.find(filter)
+        .populate("eventId", "title eventCode")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
@@ -133,10 +166,12 @@ export class PayoutService {
     const filter: any = {};
     if (status) filter.status = status;
     if (organizerId) filter.organizerId = organizerId;
+    if (query.eventId) filter.eventId = query.eventId;
 
     const [payouts, total] = await Promise.all([
       Payout.find(filter)
         .populate("organizerId", "fullName businessName email phone")
+        .populate("eventId", "title eventCode")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),

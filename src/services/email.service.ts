@@ -1,11 +1,21 @@
 import { Resend } from "resend";
 import { TemplateHelper } from "../utils/template.helper";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@easevotegh.com";
 const CURRENT_YEAR = new Date().getFullYear();
 
 export class EmailService {
+  private static _resend: Resend | null = null;
+
+  private static get resend() {
+    if (!this._resend) {
+      if (!process.env.RESEND_API_KEY) {
+        console.warn("[EmailService] RESEND_API_KEY is not defined in environment variables!");
+      }
+      this._resend = new Resend(process.env.RESEND_API_KEY);
+    }
+    return this._resend;
+  }
   static async sendVerificationEmail(email: string, token: string) {
     try {
       const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
@@ -15,16 +25,23 @@ export class EmailService {
         year: CURRENT_YEAR
       });
 
-      const result = await resend.emails.send({
+      console.log(`[EmailService] Sending verification email to ${email}`);
+      const result = await EmailService.resend.emails.send({
         from: FROM_EMAIL,
         to: email,
         subject: "Verify your email address",
         html
       });
 
+      if (result.error) {
+        console.error(`[EmailService] Resend error for ${email}:`, result.error);
+      } else {
+        console.log(`[EmailService] Verification email sent to ${email}. ID: ${result.data?.id}`);
+      }
+
       return result;
     } catch (error) {
-      console.error("Failed to send verification email:", error);
+      console.error(`[EmailService] Unexpected failure sending verification to ${email}:`, error);
       throw error;
     }
   }
@@ -37,7 +54,7 @@ export class EmailService {
       year: CURRENT_YEAR
     });
 
-    await resend.emails.send({
+    await EmailService.resend.emails.send({
       from: FROM_EMAIL,
       to: email,
       subject: "Reset your password",
@@ -53,7 +70,7 @@ export class EmailService {
       year: CURRENT_YEAR
     });
 
-    await resend.emails.send({
+    await EmailService.resend.emails.send({
       from: FROM_EMAIL,
       to: email,
       subject: "You've been invited as an Admin",
@@ -62,7 +79,7 @@ export class EmailService {
   }
 
   static async sendCustomEmail(options: { to: string; subject: string; html: string }) {
-    await resend.emails.send({
+    await EmailService.resend.emails.send({
       from: FROM_EMAIL,
       to: options.to,
       subject: options.subject,
@@ -96,7 +113,7 @@ export class EmailService {
 
     // Generate PDFs for each ticket
     const attachments = await Promise.all(
-      data.tickets.map(async (ticket, index) => {
+      data.tickets.map(async (ticket) => {
         const pdfBuffer = await PDFService.generateTicketPDF({
           eventTitle: data.eventTitle,
           eventDate: data.eventDate,
@@ -114,13 +131,20 @@ export class EmailService {
       })
     );
 
-    await resend.emails.send({
+    console.log(`[EmailService] Sending ticket email to ${data.to} for reference ${data.reference}`);
+    const result = await EmailService.resend.emails.send({
       from: FROM_EMAIL,
       to: data.to,
       subject: `Your Official Tickets: ${data.eventTitle}`,
       html: html,
       attachments
     });
+
+    if (result.error) {
+      console.error(`[EmailService] Resend error for ticket email to ${data.to}:`, result.error);
+    } else {
+      console.log(`[EmailService] Ticket email sent to ${data.to}. ID: ${result.data?.id}`);
+    }
   }
 
   static async sendVoteEmail(data: {
@@ -142,7 +166,7 @@ export class EmailService {
       year: CURRENT_YEAR
     });
 
-    await resend.emails.send({
+    await EmailService.resend.emails.send({
       from: FROM_EMAIL,
       to: data.to,
       subject: `Vote Confirmation: ${data.candidateName}`,
@@ -157,12 +181,9 @@ export class EmailService {
     categoryName: string;
     whatsappLink?: string;
   }) {
-    const whatsappSection = data.whatsappLink ? `
-      <div style="text-align: center; margin-top: 30px;">
-        <p style="font-weight: 700; margin-bottom: 20px; color: #171717; font-size: 15px;">Join the official candidates group to stay updated:</p>
-        <a href="${data.whatsappLink}" class="button" style="background-color: #25d366;">Join WhatsApp Group</a>
-      </div>
-    ` : "";
+    const whatsappSection = data.whatsappLink ? TemplateHelper.render("whatsapp-section", {
+      whatsappLink: data.whatsappLink
+    }) : "";
 
     const html = TemplateHelper.render("nomination-received", {
       nomineeName: data.nomineeName,
@@ -172,12 +193,19 @@ export class EmailService {
       year: CURRENT_YEAR
     });
 
-    await resend.emails.send({
+    console.log(`[EmailService] Sending nomination confirmation email to ${data.to}`);
+    const result = await EmailService.resend.emails.send({
       from: FROM_EMAIL,
       to: data.to,
       subject: `Nomination Received: ${data.eventTitle}`,
       html: html,
     });
+
+    if (result.error) {
+      console.error(`[EmailService] Resend error for nomination email to ${data.to}:`, result.error);
+    } else {
+      console.log(`[EmailService] Nomination email sent to ${data.to}. ID: ${result.data?.id}`);
+    }
   }
 
   static async sendNominationOutcomeEmail(data: {
@@ -190,47 +218,33 @@ export class EmailService {
     whatsappLink?: string;
   }) {
     const isApproved = data.status === "APPROVED";
-    const statusTitle = isApproved ? "Nomination Approved" : "Nomination Status Update";
+    const templateName = isApproved ? "nomination-approved" : "nomination-rejected";
     
-    let statusContent = "";
-    if (isApproved) {
-      statusContent = `
-        <p style="font-size: 16px; line-height: 26px; margin: 0 0 20px 0; color: #495057;">Great news! Your nomination for <strong>${data.eventTitle}</strong> has been approved. You are now officially a candidate.</p>
-        <div style="background-color: #f8f0f8; border: 1px solid #fbd5eb; border-radius: 12px; padding: 30px; text-align: center; margin-bottom: 30px;">
-          <p style="margin: 0 0 10px 0; font-size: 11px; font-weight: 800; color: #5b0058; text-transform: uppercase; letter-spacing: 1.5px;">YOUR VOTING ID</p>
-          <div class="badge" style="margin-bottom: 15px;">${data.candidateCode}</div>
-          <p style="margin: 0; color: #495057; font-size: 16px;">Category: <strong>${data.categoryName}</strong></p>
-        </div>
-        ${data.whatsappLink ? `
-          <div style="text-align: center; margin-bottom: 30px;">
-            <p style="font-weight: 700; margin-bottom: 15px; color: #171717;">Join the official candidates group:</p>
-            <a href="${data.whatsappLink}" class="button" style="background-color: #25d366;">Join WhatsApp Group</a>
-          </div>
-        ` : ""}
-        <p style="font-size: 14px; line-height: 22px; color: #6c757d;">You can now start sharing your code with supporters to receive votes. We wish you the very best in the competition.</p>
-      `;
-    } else {
-      statusContent = `
-        <p style="font-size: 16px; line-height: 26px; margin: 0 0 20px 0; color: #495057;">Thank you for your interest in <strong>${data.eventTitle}</strong>.</p>
-        <div style="background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 12px; padding: 30px; margin-bottom: 30px;">
-          <p style="margin: 0; color: #495057; font-size: 15px; line-height: 1.6;">We regret to inform you that your nomination for the <strong>${data.categoryName}</strong> category was not successful at this time.</p>
-        </div>
-        <p style="font-size: 14px; line-height: 22px; color: #6c757d;">While this might be disappointing, we appreciate your interest and encourage you to participate in future opportunities on EaseVote.</p>
-      `;
-    }
+    const whatsappSection = isApproved && data.whatsappLink ? TemplateHelper.render("whatsapp-section", {
+      whatsappLink: data.whatsappLink
+    }) : "";
 
-    const html = TemplateHelper.render("nomination-outcome", {
-      statusTitle,
+    const html = TemplateHelper.render(templateName, {
       nomineeName: data.nomineeName,
-      statusContent,
+      eventTitle: data.eventTitle,
+      categoryName: data.categoryName,
+      candidateCode: data.candidateCode || "",
+      whatsappSection,
       year: CURRENT_YEAR
     });
 
-    await resend.emails.send({
+    console.log(`[EmailService] Sending nomination ${data.status.toLowerCase()} email to ${data.to}`);
+    const result = await EmailService.resend.emails.send({
       from: FROM_EMAIL,
       to: data.to,
       subject: isApproved ? `Nomination Approved: ${data.eventTitle}` : `Nomination Update: ${data.eventTitle}`,
       html: html,
     });
+
+    if (result.error) {
+      console.error(`[EmailService] Resend error for nomination outcome email to ${data.to}:`, result.error);
+    } else {
+      console.log(`[EmailService] Nomination outcome email sent to ${data.to}. ID: ${result.data?.id}`);
+    }
   }
 }

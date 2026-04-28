@@ -4,6 +4,7 @@ export type PayoutStatus = "PENDING" | "PROCESSING" | "PAID" | "REJECTED" | "CAN
 
 export interface IPayout extends Document {
   organizerId: mongoose.Types.ObjectId;
+  eventId: mongoose.Types.ObjectId;
   amount: number;
   status: PayoutStatus;
   reference: string;
@@ -22,6 +23,7 @@ export interface IPayout extends Document {
 
 const payoutSchema = new Schema<IPayout>({
   organizerId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+  eventId: { type: Schema.Types.ObjectId, ref: "Event", required: true },
   amount: { type: Number, required: true },
   status: { 
     type: String, 

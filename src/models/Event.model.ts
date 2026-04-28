@@ -76,6 +76,7 @@ export interface IEvent extends Document {
   totalRevenue: number;
   totalPaidVotes: number;
   totalTicketsSold: number;
+  commissionRate?: number;
   
   // Metadata
   createdAt: Date;
@@ -202,7 +203,8 @@ const eventSchema = new Schema<IEvent>({
   // Verified Financials & Stats
   totalRevenue: { type: Number, default: 0 },
   totalPaidVotes: { type: Number, default: 0 },
-  totalTicketsSold: { type: Number, default: 0 }
+  totalTicketsSold: { type: Number, default: 0 },
+  commissionRate: { type: Number }
 }, {
   timestamps: true,
   toJSON: { virtuals: true },

@@ -195,4 +195,23 @@ export class UserService {
 
     return { message: "User restored successfully" };
   }
+
+  static async permanentDeleteUser(id: string, currentUserRole: string) {
+    if (currentUserRole !== "SUPER_ADMIN") {
+      throw new AppError("Only super admins can permanently delete users", 403);
+    }
+
+    const user = await User.findById(id);
+    if (!user) {
+      throw new AppError("User not found", 404);
+    }
+
+    if (user.role === "SUPER_ADMIN") {
+      throw new AppError("Cannot permanently delete a super admin", 403);
+    }
+
+    await User.findByIdAndDelete(id);
+
+    return { message: "User permanently deleted" };
+  }
 }

@@ -158,35 +158,19 @@ export class AnalyticsService {
   }
 
   /**
-   * High-level overview stats for a specific organizer.
-   * Derived from the live ledger for accuracy.
+   * High-level overview stats for a specific event.
+   * Handles flexible commission rates.
    */
-  static async getOrganizerPulse(organizerId: string) {
+  static async getEventPulse(eventId: string) {
     try {
-      if (!organizerId) return { totalRevenue: 0, grossRevenue: 0, totalVotes: 0, totalTickets: 0, revenueTrend: [], topEvents: [] };
+      const event = await Event.findById(eventId);
+      if (!event) throw new Error("Event not found");
 
-      const orgObjectId = new mongoose.Types.ObjectId(organizerId);
-
-      // 1. Get all events owned by organizer to define the scope (Robust Lookup)
-      const events = await Event.find({ organizerId: orgObjectId, isDeleted: false }, "_id");
-      const eventIds = events.map(e => e._id);
-      const enhancedEventIds = [...eventIds, ...eventIds.map(id => id.toString())];
-
-      if (eventIds.length === 0) {
-        return { totalRevenue: 0, grossRevenue: 0, totalVotes: 0, totalTickets: 0, revenueTrend: [], topEvents: [] };
-      }
-
-      const sixMonthsAgo = new Date();
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
-      sixMonthsAgo.setDate(1);
-      sixMonthsAgo.setHours(0, 0, 0, 0);
-
-      const [ledgerData, trendData, topEventsData, commissionSetting] = await Promise.all([
-        // 1. Ledger Aggregation
+      const [ledgerData, commissionSetting] = await Promise.all([
         Purchase.aggregate([
           { 
             $match: { 
-                eventId: { $in: enhancedEventIds }, 
+                eventId: new mongoose.Types.ObjectId(eventId), 
                 status: { $regex: /^(paid|successful|completed)$/i } 
             } 
           },
@@ -199,13 +183,81 @@ export class AnalyticsService {
             } 
           }
         ]),
-        // 2. Revenue Trend
+        Settings.findOne({ key: "platform_commission" })
+      ]);
+
+      const ledger = ledgerData[0] || { totalVolume: 0, totalVotes: 0, totalTickets: 0 };
+      
+      // Flexible Commission Logic
+      const globalCommission = commissionSetting ? parseFloat(commissionSetting.value) : 10;
+      const commissionRate = event.commissionRate !== undefined && event.commissionRate !== null 
+        ? event.commissionRate 
+        : globalCommission;
+
+      const netRevenue = ledger.totalVolume * (1 - commissionRate / 100);
+
+      return {
+        eventId,
+        title: event.title,
+        grossRevenue: ledger.totalVolume,
+        netRevenue: netRevenue,
+        totalVotes: ledger.totalVotes,
+        totalTickets: ledger.totalTickets,
+        commissionRate,
+        isCustomCommission: event.commissionRate !== undefined && event.commissionRate !== null
+      };
+    } catch (err) {
+      console.error("[AnalyticsService] Error in getEventPulse:", err);
+      throw err;
+    }
+  }
+
+  /**
+   * High-level overview stats for a specific organizer.
+   * Aggregates stats across all events, respecting individual commission rates.
+   */
+  static async getOrganizerPulse(organizerId: string) {
+    try {
+      if (!organizerId) return { totalRevenue: 0, grossRevenue: 0, totalVotes: 0, totalTickets: 0, revenueTrend: [], topEvents: [] };
+
+      const orgObjectId = new mongoose.Types.ObjectId(organizerId);
+
+      // 1. Get all events owned by organizer
+      const events = await Event.find({ organizerId: orgObjectId, isDeleted: false });
+      if (events.length === 0) {
+        return { totalRevenue: 0, grossRevenue: 0, totalVotes: 0, totalTickets: 0, revenueTrend: [], topEvents: [] };
+      }
+
+      const commissionSetting = await Settings.findOne({ key: "platform_commission" });
+      const globalCommission = commissionSetting ? parseFloat(commissionSetting.value) : 10;
+
+      const eventIds = events.map(e => e._id);
+      
+      const [ledgerData, trendData] = await Promise.all([
+        // Aggregated stats per event to apply individual commission rates
         Purchase.aggregate([
           { 
             $match: { 
-              eventId: { $in: enhancedEventIds },
+                eventId: { $in: eventIds }, 
+                status: { $regex: /^(paid|successful|completed)$/i } 
+            } 
+          },
+          { 
+            $group: { 
+              _id: "$eventId", 
+              totalVolume: { $sum: { $convert: { input: "$amount", to: "double", onError: 0, onNull: 0 } } },
+              totalVotes: { $sum: { $ifNull: ["$voteCount", 0] } },
+              totalTickets: { $sum: { $ifNull: ["$ticketQuantity", 0] } }
+            } 
+          }
+        ]),
+        // Revenue Trend (Simplified to gross for trend, or we could map net if needed)
+        Purchase.aggregate([
+          { 
+            $match: { 
+              eventId: { $in: eventIds },
               status: { $regex: /^(paid|successful|completed)$/i },
-              createdAt: { $gte: sixMonthsAgo }
+              createdAt: { $gte: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000) } // 6 months
             } 
           },
           {
@@ -218,66 +270,45 @@ export class AnalyticsService {
             }
           },
           { $sort: { "_id.year": 1, "_id.month": 1 } }
-        ]),
-        // 3. Top Events for this Organizer
-        Purchase.aggregate([
-          { 
-            $match: { 
-                eventId: { $in: enhancedEventIds }, 
-                status: { $regex: /^(paid|successful|completed)$/i } 
-            } 
-          },
-          { 
-            $group: { 
-              _id: "$eventId", 
-              revenue: { $sum: { $convert: { input: "$amount", to: "double", onError: 0, onNull: 0 } } },
-              votes: { $sum: { $ifNull: ["$voteCount", 0] } },
-              tickets: { $sum: { $ifNull: ["$ticketQuantity", 0] } }
-            } 
-          },
-          { $sort: { revenue: -1 } },
-          { $limit: 10 },
-          {
-            $lookup: {
-              from: "events",
-              localField: "_id",
-              foreignField: "_id",
-              as: "eventDetails"
-            }
-          },
-          { $unwind: { path: "$eventDetails", preserveNullAndEmptyArrays: true } }
-        ]),
-        Settings.findOne({ key: "platform_commission" })
+        ])
       ]);
 
-      const ledger = ledgerData[0] || { totalVolume: 0, totalVotes: 0, totalTickets: 0 };
-      const commissionRate = commissionSetting ? parseFloat(commissionSetting.value) : 10;
-      const netRevenue = ledger.totalVolume * (1 - commissionRate / 100);
+      let totalNetRevenue = 0;
+      let totalGrossRevenue = 0;
+      let totalVotes = 0;
+      let totalTickets = 0;
+
+      const topEvents = ledgerData.map(item => {
+        const event = events.find(e => e._id.toString() === item._id.toString());
+        const rate = event?.commissionRate ?? globalCommission;
+        const net = item.totalVolume * (1 - rate / 100);
+        
+        totalNetRevenue += net;
+        totalGrossRevenue += item.totalVolume;
+        totalVotes += item.totalVotes;
+        totalTickets += item.totalTickets;
+
+        return {
+          id: item._id,
+          title: event?.title || "Unknown",
+          revenue: item.totalVolume,
+          organizerNet: net,
+          votes: item.totalVotes,
+          tickets: item.totalTickets
+        };
+      }).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
 
       const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       const revenueTrend = trendData.map((t: any) => ({
         name: t._id && t._id.month ? MONTH_NAMES[t._id.month - 1] : "N/A",
-        revenue: t.revenue * (1 - commissionRate / 100)
+        revenue: t.revenue // Gross trend for simplicity
       })).filter(t => t.name !== "N/A");
 
-      const topEvents = topEventsData
-        .filter((e: any) => e.eventDetails)
-        .map((e: any) => ({
-          id: e._id,
-          title: e.eventDetails.title,
-          type: e.eventDetails.type,
-          revenue: e.revenue,
-          votes: e.votes,
-          tickets: e.tickets,
-          organizerNet: e.revenue * (1 - commissionRate / 100)
-        }));
-
       return {
-        totalRevenue: netRevenue, // Net share
-        grossRevenue: ledger.totalVolume,
-        totalVotes: ledger.totalVotes,
-        totalTickets: ledger.totalTickets,
-        commissionRate,
+        totalRevenue: totalNetRevenue,
+        grossRevenue: totalGrossRevenue,
+        totalVotes,
+        totalTickets,
         revenueTrend,
         topEvents
       };
