@@ -370,7 +370,8 @@ export class PurchaseService {
           venue: event.venue || "TBA",
           tickets: ticketData,
           totalAmount: purchase.amount,
-          reference: purchase.paymentReference
+          reference: purchase.paymentReference,
+          eventImage: event.imageUrl
         });
 
         // Send SMS

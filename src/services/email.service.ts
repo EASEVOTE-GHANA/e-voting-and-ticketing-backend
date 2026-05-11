@@ -38,13 +38,12 @@ export class EmailService {
         form.append("callBackUrl", "");
 
         // As per docs: "attach_file"
+        // Using indexed keys for multiple attachments
         options.attachments.forEach((att, index) => {
-           if (index === 0) {
-             form.append("attach_file", att.content, {
-               filename: att.filename,
-               contentType: "application/pdf",
-             });
-           }
+          form.append(`attach_file[${index}]`, att.content, {
+            filename: att.filename,
+            contentType: "application/pdf",
+          });
         });
 
         response = await axios.post(this.NALO_EMAIL_URL, form, {
@@ -166,29 +165,45 @@ export class EmailService {
       year: CURRENT_YEAR
     });
 
-    const attachments = await Promise.all(
-      data.tickets.map(async (ticket) => {
-        const pdfBuffer = await PDFService.generateTicketPDF({
-          eventTitle: data.eventTitle,
-          eventDate: data.eventDate,
-          venue: data.venue,
-          customerName: data.customerName,
-          ticketNumber: ticket.ticketNumber,
-          ticketTypeName: ticket.ticketTypeName,
-          qrData: ticket.qrData,
-          eventImage: data.eventImage
+    // Pre-fetch image to avoid multiple downloads
+    let imageBuffer: Buffer | undefined;
+    let finalImageUrl = data.eventImage;
+
+    // PDFKit doesn't support WEBP. If it's a Cloudinary URL, convert to JPG
+    if (finalImageUrl && finalImageUrl.includes('cloudinary.com') && finalImageUrl.endsWith('.webp')) {
+      finalImageUrl = finalImageUrl.replace('.webp', '.jpg');
+    }
+
+    if (finalImageUrl && finalImageUrl.startsWith('http')) {
+      try {
+        const response = await axios.get(finalImageUrl, { 
+          responseType: "arraybuffer",
+          timeout: 3000
         });
-        return {
-          filename: `Ticket_${ticket.ticketNumber}.pdf`,
-          content: pdfBuffer,
-        };
-      })
-    );
+        imageBuffer = Buffer.from(response.data);
+      } catch (err) {
+        console.error("[EmailService] Failed to pre-fetch event image:", err);
+      }
+    }
+
+    const pdfBuffer = await PDFService.generateTicketPDF({
+      eventTitle: data.eventTitle,
+      eventDate: data.eventDate,
+      venue: data.venue,
+      customerName: data.customerName,
+      tickets: data.tickets,
+      imageBuffer: imageBuffer
+    });
+
+    const attachments = [{
+      filename: `Tickets-${data.eventTitle.replace(/\s+/g, '-')}.pdf`,
+      content: pdfBuffer
+    }];
 
     return this.sendNaloEmail({
       to: data.to,
-      subject: `Your Official Tickets: ${data.eventTitle}`,
-      html: html,
+      subject: `Your Official Tickets: ${data.eventTitle} - EaseVote Ghana`,
+      html,
       attachments
     });
   }

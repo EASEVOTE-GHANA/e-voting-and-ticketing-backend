@@ -2,15 +2,20 @@ import PDFDocument from "pdfkit";
 import { PassThrough } from "stream";
 import axios from "axios";
 
+export interface IPDFTicket {
+  ticketNumber: string;
+  ticketTypeName: string;
+  qrData: string;
+}
+
 export interface IPDFTicketData {
   eventTitle: string;
   eventDate: string;
   venue: string;
   customerName: string;
-  ticketNumber: string;
-  ticketTypeName: string;
-  qrData: string;
+  tickets: IPDFTicket[];
   eventImage?: string;
+  imageBuffer?: Buffer;
 }
 
 export class PDFService {
@@ -27,73 +32,87 @@ export class PDFService {
         doc.on("end", () => resolve(Buffer.concat(chunks)));
         doc.on("error", (err) => reject(err));
 
-        // -- Background & Layout --
-        // Primary Brand Color: #5b0058
-        doc.rect(0, 0, 600, 250).fill("#ffffff");
-        doc.rect(0, 0, 420, 250).fill("#5b0058");
-
-        // -- Event Image (as background for left side if available) --
-        if (data.eventImage) {
+        // -- Event Image Pre-fetch --
+        let currentImageBuffer = data.imageBuffer;
+        if (!currentImageBuffer && data.eventImage && data.eventImage.startsWith('http')) {
           try {
-            const response = await axios.get(data.eventImage, { responseType: "arraybuffer" });
-            const imageBuffer = Buffer.from(response.data);
-            
-            // Draw image on left side
-            doc.save();
-            doc.image(imageBuffer, 0, 0, { width: 420, height: 250, cover: [420, 250] });
-            // Add a dark overlay to ensure text readability
-            doc.rect(0, 0, 420, 250).fillOpacity(0.7).fill("#5b0058");
-            doc.restore();
+            const response = await axios.get(data.eventImage, { 
+              responseType: "arraybuffer",
+              timeout: 3000 
+            });
+            currentImageBuffer = Buffer.from(response.data);
           } catch (e) {
-            console.error("[PDFService] Failed to load event image for PDF:", e);
+            console.error("[PDFService] Failed to load event image for PDF:", data.eventImage);
           }
         }
 
-        // -- Text Content (Left Side) --
-        doc.fillColor("#ffffff");
-        
-        // Official Badge
-        doc.fontSize(8).font("Helvetica-Bold").text("OFFICIAL ACCESS TICKET", 30, 30, { characterSpacing: 1.5 });
-        
-        // Event Title
-        doc.fontSize(22).font("Helvetica-Bold").text(data.eventTitle.toUpperCase(), 30, 60, { width: 360, lineGap: 5 });
-        
-        // Event Details
-        doc.fontSize(10).font("Helvetica").text(`DATE: ${data.eventDate}`, 30, 140);
-        doc.fontSize(10).font("Helvetica").text(`VENUE: ${data.venue}`, 30, 155);
-        
-        // Ticket Category (Highlighted)
-        doc.rect(30, 185, 120, 25).fill("#d3067d");
-        doc.fillColor("#ffffff").fontSize(10).font("Helvetica-Bold").text(data.ticketTypeName.toUpperCase(), 40, 193);
+        // Generate a page for each ticket
+        for (let i = 0; i < data.tickets.length; i++) {
+          if (i > 0) doc.addPage({ size: [600, 250], margin: 0 });
+          
+          const ticket = data.tickets[i];
+          
+          // -- Left Section (420px Background) --
+          doc.rect(0, 0, 420, 250).fill("#5b0058"); // Fallback color
 
-        // -- Customer Info --
-        doc.fillColor("#ffffff").fontSize(9).font("Helvetica").text(`HOLDER: ${data.customerName.toUpperCase()}`, 30, 220);
+          if (currentImageBuffer) {
+            try {
+              doc.save();
+              doc.image(currentImageBuffer, 0, 0, { width: 420, height: 250, cover: [420, 250] });
+              // Strong dark overlay for high contrast
+              doc.rect(0, 0, 420, 250).fillOpacity(0.75).fill("#000000");
+              doc.restore();
+              doc.fillOpacity(1.0);
+            } catch (e) {
+              console.error("[PDFService] Error drawing background:", e);
+            }
+          }
 
-        // -- Right Side (Verification) --
-        doc.fillColor("#171717");
-        
-        // QR Code Placeholder (We use a dynamic QR service or we can draw one if we had a lib)
-        // Since we need a QR code, and I don't see a QR lib in package.json yet, 
-        // I'll use a public API for the PDF QR image to keep it simple and reliable.
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(data.qrData)}`;
-        try {
-          const qrResponse = await axios.get(qrUrl, { responseType: "arraybuffer" });
-          const qrBuffer = Buffer.from(qrResponse.data);
-          doc.image(qrBuffer, 440, 40, { width: 130 });
-        } catch (e) {
-          doc.rect(440, 40, 130, 130).stroke("#e5e5e5");
-          doc.fontSize(8).text("QR CODE UNAVAILABLE", 455, 100);
+          // -- White Text Content (on left section) --
+          doc.fillColor("#ffffff");
+          
+          // Badge
+          doc.fontSize(7).font("Helvetica-Bold").text("OFFICIAL ACCESS TICKET", 30, 30, { characterSpacing: 1 });
+          
+          // Event Title
+          doc.fontSize(22).font("Helvetica-Bold").text(data.eventTitle.toUpperCase(), 30, 60, { width: 360, lineGap: 5 });
+          
+          // Event Details
+          doc.fontSize(10).font("Helvetica").text(`DATE: ${data.eventDate}`, 30, 140);
+          doc.fontSize(10).font("Helvetica").text(`VENUE: ${data.venue || "TBA"}`, 30, 155, { width: 360 });
+          
+          // Ticket Category
+          doc.rect(30, 185, 120, 25).fill("#d3067d");
+          doc.fillColor("#ffffff").fontSize(10).font("Helvetica-Bold").text(ticket.ticketTypeName.toUpperCase(), 40, 193);
+
+          // Holder
+          doc.fillColor("#ffffff").fontSize(9).font("Helvetica").text(`HOLDER: ${data.customerName.toUpperCase()}`, 30, 225);
+
+          // -- Right Verification Section (180px White/Light) --
+          doc.rect(420, 0, 180, 250).fill("#ffffff");
+          doc.moveTo(420, 0).lineTo(420, 250).dash(5, { space: 5 }).stroke("#dddddd");
+
+          // QR Code
+          const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(ticket.qrData)}`;
+          try {
+            const qrResponse = await axios.get(qrUrl, { 
+              responseType: "arraybuffer",
+              timeout: 2000 
+            });
+            const qrBuffer = Buffer.from(qrResponse.data);
+            doc.image(qrBuffer, 440, 40, { width: 140 });
+          } catch (e) {
+            doc.rect(440, 40, 140, 140).stroke("#eeeeee");
+            doc.fillColor("#cccccc").fontSize(8).text("QR UNAVAILABLE", 470, 100);
+          }
+
+          // Ticket ID
+          doc.fillColor("#171717").fontSize(9).font("Helvetica-Bold").text("TICKET ID", 440, 190);
+          doc.fontSize(11).font("Courier-Bold").text(ticket.ticketNumber, 440, 205);
+          
+          // Branding
+          doc.fontSize(8).fillColor("#999999").text("VERIFY AT ENTRANCE", 440, 230);
         }
-
-        // Ticket Number
-        doc.fontSize(9).font("Helvetica-Bold").text("TICKET ID", 440, 185);
-        doc.fontSize(12).font("Courier-Bold").text(data.ticketNumber, 440, 200, { characterSpacing: 1 });
-        
-        // Branding at bottom right
-        doc.fontSize(8).fillColor("#a3a3a3").text("VERIFY AT ENTRANCE", 440, 225);
-
-        // -- Cutting Line --
-        doc.moveTo(420, 0).lineTo(420, 250).dash(5, { space: 5 }).stroke("#eeeeee");
 
         doc.end();
       } catch (error) {
