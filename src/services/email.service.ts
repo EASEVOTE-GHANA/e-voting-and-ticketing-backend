@@ -1,61 +1,113 @@
-import { Resend } from "resend";
+import axios from "axios";
+import FormData from "form-data";
 import { TemplateHelper } from "../utils/template.helper";
 
-const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@easevotegh.com";
+const FROM_EMAIL = process.env.FROM_EMAIL_PURE || "noreply@easevotegh.com";
+const SENDER_NAME = process.env.SENDER_NAME || "EaseVote";
 const CURRENT_YEAR = new Date().getFullYear();
 
 export class EmailService {
-  private static _resend: Resend | null = null;
+  // Using the production API URL provided by the user
+  private static readonly NALO_EMAIL_URL = "https://email.nalosolutions.com/smsbackend/clientapi/Resl_Nalo/send-email/";
 
-  private static get resend() {
-    if (!this._resend) {
-      if (!process.env.RESEND_API_KEY) {
-        console.warn("[EmailService] RESEND_API_KEY is not defined in environment variables!");
-      }
-      this._resend = new Resend(process.env.RESEND_API_KEY);
-    }
-    return this._resend;
-  }
-  static async sendVerificationEmail(email: string, token: string) {
+  private static async sendNaloEmail(options: {
+    to: string;
+    subject: string;
+    html: string;
+    attachments?: Array<{ filename: string; content: Buffer }>;
+  }) {
     try {
-      const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
+      console.log(`[EmailService] Preparing to send email to ${options.to} via Nalo API...`);
+      
+      let response;
 
-      const html = TemplateHelper.render("verification", {
-        verificationUrl,
-        year: CURRENT_YEAR
-      });
+      if (options.attachments && options.attachments.length > 0) {
+        // Use form-data for attachments as per Nalo docs
+        const form = new FormData();
+        form.append("username", process.env.NALO_USERNAME);
+        form.append("password", process.env.NALO_PASSWORD);
+        form.append("emailTo[0]", options.to);
+        form.append("emailFrom", FROM_EMAIL);
+        form.append("senderName", SENDER_NAME);
+        form.append("subject", options.subject);
+        form.append("emailBody", options.html);
+        form.append("callBackUrl", "");
 
-      console.log(`[EmailService] Sending verification email to ${email}`);
-      const result = await EmailService.resend.emails.send({
-        from: FROM_EMAIL,
-        to: email,
-        subject: "Verify your email address",
-        html
-      });
+        // As per docs: "attach_file"
+        options.attachments.forEach((att, index) => {
+           if (index === 0) {
+             form.append("attach_file", att.content, {
+               filename: att.filename,
+               contentType: "application/pdf",
+             });
+           }
+        });
 
-      if (result.error) {
-        console.error(`[EmailService] Resend error for ${email}:`, result.error);
+        response = await axios.post(this.NALO_EMAIL_URL, form, {
+          headers: {
+            ...form.getHeaders(),
+          },
+        });
       } else {
-        console.log(`[EmailService] Verification email sent to ${email}. ID: ${result.data?.id}`);
+        // Use JSON for standard emails
+        const payload = {
+          username: process.env.NALO_USERNAME,
+          password: process.env.NALO_PASSWORD,
+          emailTo: [options.to],
+          emailFrom: FROM_EMAIL,
+          senderName: SENDER_NAME,
+          subject: options.subject,
+          emailBody: options.html,
+          callBackUrl: "",
+        };
+
+        response = await axios.post(this.NALO_EMAIL_URL, payload, {
+          headers: { 
+            "Content-Type": "application/json",
+          },
+        });
       }
 
-      return result;
-    } catch (error) {
-      console.error(`[EmailService] Unexpected failure sending verification to ${email}:`, error);
+      // Success check based on Nalo response structure
+      const success = response.data.status === true || response.status === 200;
+      if (!success) {
+        console.error(`[EmailService] Nalo error for ${options.to}:`, response.data);
+      } else {
+        console.log(`[EmailService] Email sent to ${options.to}. Job ID: ${response.data.email_job_id}`);
+      }
+
+      return {
+        data: success ? { id: response.data.email_job_id } : null,
+        error: success ? null : { message: response.data.message || "Nalo API failed", code: response.status }
+      };
+    } catch (error: any) {
+      console.error(`[EmailService] Unexpected failure sending email to ${options.to}:`, error.response?.data || error.message);
       throw error;
     }
   }
 
+  static async sendVerificationEmail(email: string, token: string) {
+    const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
+    const html = TemplateHelper.render("verification", {
+      verificationUrl,
+      year: CURRENT_YEAR
+    });
+
+    return this.sendNaloEmail({
+      to: email,
+      subject: "Verify your email address",
+      html
+    });
+  }
+
   static async sendPasswordResetEmail(email: string, token: string) {
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
-
     const html = TemplateHelper.render("password-reset", {
       resetUrl,
       year: CURRENT_YEAR
     });
 
-    await EmailService.resend.emails.send({
-      from: FROM_EMAIL,
+    await this.sendNaloEmail({
       to: email,
       subject: "Reset your password",
       html
@@ -64,14 +116,12 @@ export class EmailService {
 
   static async sendAdminInvitationEmail(email: string, token: string) {
     const inviteUrl = `${process.env.FRONTEND_URL}/accept-invitation?token=${token}`;
-
     const html = TemplateHelper.render("admin-invitation", {
       inviteUrl,
       year: CURRENT_YEAR
     });
 
-    await EmailService.resend.emails.send({
-      from: FROM_EMAIL,
+    await this.sendNaloEmail({
       to: email,
       subject: "You've been invited as an Admin",
       html
@@ -79,8 +129,7 @@ export class EmailService {
   }
 
   static async sendCustomEmail(options: { to: string; subject: string; html: string }) {
-    await EmailService.resend.emails.send({
-      from: FROM_EMAIL,
+    await this.sendNaloEmail({
       to: options.to,
       subject: options.subject,
       html: options.html,
@@ -111,7 +160,6 @@ export class EmailService {
       year: CURRENT_YEAR
     });
 
-    // Generate PDFs for each ticket
     const attachments = await Promise.all(
       data.tickets.map(async (ticket) => {
         const pdfBuffer = await PDFService.generateTicketPDF({
@@ -131,20 +179,12 @@ export class EmailService {
       })
     );
 
-    console.log(`[EmailService] Sending ticket email to ${data.to} for reference ${data.reference}`);
-    const result = await EmailService.resend.emails.send({
-      from: FROM_EMAIL,
+    return this.sendNaloEmail({
       to: data.to,
       subject: `Your Official Tickets: ${data.eventTitle}`,
       html: html,
       attachments
     });
-
-    if (result.error) {
-      console.error(`[EmailService] Resend error for ticket email to ${data.to}:`, result.error);
-    } else {
-      console.log(`[EmailService] Ticket email sent to ${data.to}. ID: ${result.data?.id}`);
-    }
   }
 
   static async sendVoteEmail(data: {
@@ -166,8 +206,7 @@ export class EmailService {
       year: CURRENT_YEAR
     });
 
-    await EmailService.resend.emails.send({
-      from: FROM_EMAIL,
+    await this.sendNaloEmail({
       to: data.to,
       subject: `Vote Confirmation: ${data.candidateName}`,
       html: html,
@@ -193,19 +232,11 @@ export class EmailService {
       year: CURRENT_YEAR
     });
 
-    console.log(`[EmailService] Sending nomination confirmation email to ${data.to}`);
-    const result = await EmailService.resend.emails.send({
-      from: FROM_EMAIL,
+    return this.sendNaloEmail({
       to: data.to,
       subject: `Nomination Received: ${data.eventTitle}`,
       html: html,
     });
-
-    if (result.error) {
-      console.error(`[EmailService] Resend error for nomination email to ${data.to}:`, result.error);
-    } else {
-      console.log(`[EmailService] Nomination email sent to ${data.to}. ID: ${result.data?.id}`);
-    }
   }
 
   static async sendNominationOutcomeEmail(data: {
@@ -233,18 +264,10 @@ export class EmailService {
       year: CURRENT_YEAR
     });
 
-    console.log(`[EmailService] Sending nomination ${data.status.toLowerCase()} email to ${data.to}`);
-    const result = await EmailService.resend.emails.send({
-      from: FROM_EMAIL,
+    return this.sendNaloEmail({
       to: data.to,
       subject: isApproved ? `Nomination Approved: ${data.eventTitle}` : `Nomination Update: ${data.eventTitle}`,
       html: html,
     });
-
-    if (result.error) {
-      console.error(`[EmailService] Resend error for nomination outcome email to ${data.to}:`, result.error);
-    } else {
-      console.log(`[EmailService] Nomination outcome email sent to ${data.to}. ID: ${result.data?.id}`);
-    }
   }
 }
