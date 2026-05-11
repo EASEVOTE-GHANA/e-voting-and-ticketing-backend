@@ -6,8 +6,8 @@ import mongoose from "mongoose";
 
 export class VoteService {
   static async initiateVote(eventId: string, candidateCode: string, voteCount: number, customerEmail: string, customerName?: string, customerPhone?: string) {
-    const event = await Event.findById(eventId);
-    PurchaseService.validateEventAvailability(event, 'VOTING');
+    const event = await PurchaseService.validateEventAvailability(eventId, 'VOTING');
+    if (!event) throw new AppError("Event not found", 404);
 
     let candidate: any = null;
     let categoryId: string = "";

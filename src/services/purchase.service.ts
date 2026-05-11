@@ -43,7 +43,9 @@ export class PurchaseService {
   /**
    * Comprehensive check for event availability for payments/voting
    */
-  public static validateEventAvailability(event: any, type: 'VOTING' | 'TICKETING') {
+  public static async validateEventAvailability(eventOrId: any, type: 'VOTING' | 'TICKETING') {
+    const event = typeof eventOrId === 'string' ? await Event.findById(eventOrId) : eventOrId;
+
     if (!event) {
       throw new AppError("Event not found", 404);
     }
@@ -74,12 +76,14 @@ export class PurchaseService {
     if (!allowedStatuses.includes(event.status)) {
       throw new AppError(`Event is not open for ${type === 'TICKETING' ? 'ticket purchases' : 'voting'} at this time`, 400);
     }
+
+    return event;
   }
 
   static async initializeTicketPurchase(data: any) {
     console.log(`[PurchaseService] initializeTicketPurchase called with:`, JSON.stringify(data, null, 2));
-    const event = await Event.findById(data.eventId);
-    this.validateEventAvailability(event, 'TICKETING');
+    const event = await this.validateEventAvailability(data.eventId, 'TICKETING');
+
 
     const ticketType = event.ticketTypes?.find(tt => tt._id?.toString() === data.ticketTypeId);
     if (!ticketType) {
@@ -149,8 +153,7 @@ export class PurchaseService {
 
   static async initializeVotePurchase(data: any) {
     console.log(`[PurchaseService] initializeVotePurchase called with:`, JSON.stringify(data, null, 2));
-    const event = await Event.findById(data.eventId);
-    this.validateEventAvailability(event, 'VOTING');
+    const event = await this.validateEventAvailability(data.eventId, 'VOTING');
 
     // Check voting time window
     const now = new Date();
@@ -690,8 +693,8 @@ export class PurchaseService {
     network: string;
     source: "ussd";
   }) {
-    const event = await Event.findById(data.eventId);
-    this.validateEventAvailability(event, 'TICKETING');
+    const event = await this.validateEventAvailability(data.eventId, 'TICKETING');
+
 
     const ticketType = event.ticketTypes?.find(tt => tt._id?.toString() === data.ticketTypeId);
     if (!ticketType) {
@@ -763,8 +766,8 @@ export class PurchaseService {
     network: string;
     source: "ussd";
   }) {
-    const event = await Event.findById(data.eventId);
-    this.validateEventAvailability(event, 'VOTING');
+    const event = await this.validateEventAvailability(data.eventId, 'VOTING');
+    if (!event) throw new AppError("Event not found", 404);
 
     const now = new Date();
     const votingStart = event.votingStartTime || event.startDate;
