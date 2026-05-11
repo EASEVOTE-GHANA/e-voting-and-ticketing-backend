@@ -17,20 +17,31 @@ export class NaloUSSDService implements IUSSDService {
   }
 
   async handleRequest(request: USSDRequest): Promise<USSDResponse> {
-    const sessionId = this.getSessionId(request.MSISDN);
-    
-    if (request.MSGTYPE) {
-      globalSessions.delete(sessionId);
-      return this.showWelcomeScreen(request);
-    }
+    try {
+      const sessionId = this.getSessionId(request.MSISDN);
+      
+      if (request.MSGTYPE) {
+        globalSessions.delete(sessionId);
+        return this.showWelcomeScreen(request);
+      }
 
-    const session = globalSessions.get(sessionId);
-    
-    if (!session) {
-      return this.showWelcomeScreen(request);
-    }
+      const session = globalSessions.get(sessionId);
+      
+      if (!session) {
+        return this.showWelcomeScreen(request);
+      }
 
-    return this.handleUserInput(request, session);
+      return await this.handleUserInput(request, session);
+    } catch (error: any) {
+      console.error(`[USSD] Unhandled error for ${request.MSISDN}:`, error);
+      return {
+        USERID: request.USERID,
+        MSISDN: request.MSISDN,
+        USERDATA: request.USERDATA,
+        MSG: "Something went wrong. Please try again later.",
+        MSGTYPE: false
+      };
+    }
   }
 
   private showWelcomeScreen(request: USSDRequest): USSDResponse {
@@ -251,12 +262,13 @@ export class NaloUSSDService implements IUSSDService {
         MSGTYPE: false
       };
     } catch (error: any) {
+      console.error(`[USSD] Vote initiation failed for ${request.MSISDN}:`, error);
       globalSessions.delete(sessionId);
       return {
         USERID: request.USERID,
         MSISDN: request.MSISDN,
         USERDATA: request.USERDATA,
-        MSG: `Error: ${error.message}`,
+        MSG: "Something went wrong. Please try again later.",
         MSGTYPE: false
       };
     }
@@ -426,12 +438,13 @@ export class NaloUSSDService implements IUSSDService {
         MSGTYPE: false
       };
     } catch (error: any) {
+      console.error(`[USSD] Ticket initiation failed for ${request.MSISDN}:`, error);
       globalSessions.delete(sessionId);
       return {
         USERID: request.USERID,
         MSISDN: request.MSISDN,
         USERDATA: request.USERDATA,
-        MSG: `Error: ${error.message}`,
+        MSG: "Something went wrong. Please try again later.",
         MSGTYPE: false
       };
     }

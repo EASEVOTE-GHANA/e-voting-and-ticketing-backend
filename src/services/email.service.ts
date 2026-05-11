@@ -2,8 +2,6 @@ import axios from "axios";
 import FormData from "form-data";
 import { TemplateHelper } from "../utils/template.helper";
 
-const FROM_EMAIL = process.env.FROM_EMAIL_PURE || "noreply@easevotegh.com";
-const SENDER_NAME = process.env.SENDER_NAME || "EaseVote";
 const CURRENT_YEAR = new Date().getFullYear();
 
 export class EmailService {
@@ -17,9 +15,15 @@ export class EmailService {
     attachments?: Array<{ filename: string; content: Buffer }>;
   }) {
     try {
-      console.log(`[EmailService] Preparing to send email to ${options.to} via Nalo API...`);
+      const fromEmail = process.env.FROM_EMAIL_PURE || "noreply@easevotegh.com";
+      const senderName = process.env.SENDER_NAME || "EaseVote Ghana";
+      
+      console.log(`[EmailService] Preparing to send email to ${options.to} via Nalo API from ${fromEmail}...`);
       
       let response;
+
+      // Nalo documentation specifically uses this User-Agent for multipart requests
+      const NALO_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36";
 
       if (options.attachments && options.attachments.length > 0) {
         // Use form-data for attachments as per Nalo docs
@@ -27,8 +31,8 @@ export class EmailService {
         form.append("username", process.env.NALO_USERNAME);
         form.append("password", process.env.NALO_PASSWORD);
         form.append("emailTo[0]", options.to);
-        form.append("emailFrom", FROM_EMAIL);
-        form.append("senderName", SENDER_NAME);
+        form.append("emailFrom", fromEmail);
+        form.append("senderName", senderName);
         form.append("subject", options.subject);
         form.append("emailBody", options.html);
         form.append("callBackUrl", "");
@@ -46,6 +50,7 @@ export class EmailService {
         response = await axios.post(this.NALO_EMAIL_URL, form, {
           headers: {
             ...form.getHeaders(),
+            "User-Agent": NALO_USER_AGENT
           },
         });
       } else {
@@ -54,8 +59,8 @@ export class EmailService {
           username: process.env.NALO_USERNAME,
           password: process.env.NALO_PASSWORD,
           emailTo: [options.to],
-          emailFrom: FROM_EMAIL,
-          senderName: SENDER_NAME,
+          emailFrom: fromEmail,
+          senderName: senderName,
           subject: options.subject,
           emailBody: options.html,
           callBackUrl: "",
@@ -64,6 +69,7 @@ export class EmailService {
         response = await axios.post(this.NALO_EMAIL_URL, payload, {
           headers: { 
             "Content-Type": "application/json",
+            "User-Agent": NALO_USER_AGENT
           },
         });
       }
