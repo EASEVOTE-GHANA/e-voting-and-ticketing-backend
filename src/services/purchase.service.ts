@@ -476,12 +476,7 @@ export class PurchaseService {
     
     for (let i = 0; i < purchase.ticketQuantity!; i++) {
       const ticketNumber = this.generateTicketNumber();
-      const qrData = JSON.stringify({
-        eventId: purchase.eventId,
-        ticketNumber,
-        purchaseId: purchase._id,
-        customerEmail: purchase.customerEmail
-      });
+      const qrData = ticketNumber;
 
       const ticket = await Ticket.create({
         eventId: purchase.eventId,
