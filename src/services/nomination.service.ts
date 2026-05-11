@@ -46,13 +46,12 @@ export class NominationService {
 
     const isOrganizer = userId && event.organizerId.toString() === userId;
 
+    // Allow fetching the form configuration even if the event is not yet open, 
+    // as long as public nominations are enabled for the event.
+    // Submission will still be blocked by the status check in submitNomination.
     if (!isOrganizer) {
       if (!event.allowPublicNominations) {
         throw new AppError("Public nominations not enabled for this event", 400);
-      }
-
-      if (!["NOMINATING", "LIVE", "PUBLISHED"].includes(event.status)) {
-        throw new AppError("Event is not currently taking nominations", 400);
       }
     }
 
@@ -81,12 +80,12 @@ export class NominationService {
       throw new AppError("Event not found", 404);
     }
 
+    // Use unified validator to check event status and suspension
+    const { PurchaseService } = require("./purchase.service");
+    await PurchaseService.validateEventAvailability(event, "VOTING");
+
     if (!event.allowPublicNominations) {
       throw new AppError("Public nominations not enabled for this event", 400);
-    }
-
-    if (!["NOMINATING", "LIVE", "PUBLISHED"].includes(event.status)) {
-      throw new AppError("Event is not currently taking nominations", 400);
     }
 
     // Enforce nomination dates

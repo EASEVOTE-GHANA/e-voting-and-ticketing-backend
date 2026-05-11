@@ -7,9 +7,7 @@ import mongoose from "mongoose";
 export class VoteService {
   static async initiateVote(eventId: string, candidateCode: string, voteCount: number, customerEmail: string, customerName?: string, customerPhone?: string) {
     const event = await Event.findById(eventId);
-    if (!event || event.status !== "LIVE") {
-      throw new AppError("Event not available for voting", 400);
-    }
+    PurchaseService.validateEventAvailability(event, 'VOTING');
 
     let candidate: any = null;
     let categoryId: string = "";

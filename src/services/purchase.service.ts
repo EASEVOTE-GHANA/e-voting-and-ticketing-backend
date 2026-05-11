@@ -39,17 +39,47 @@ export class PurchaseService {
   static generateTicketNumber(): string {
     return `TK-${crypto.randomBytes(5).toString("hex").toUpperCase()}`;
   }
+  
+  /**
+   * Comprehensive check for event availability for payments/voting
+   */
+  public static validateEventAvailability(event: any, type: 'VOTING' | 'TICKETING') {
+    if (!event) {
+      throw new AppError("Event not found", 404);
+    }
+    
+    if (event.isDeleted) {
+      throw new AppError("Event has been removed", 410);
+    }
+
+    if (event.status === "SUSPENDED") {
+      throw new AppError("Event is currently suspended. Payments are not allowed.", 403);
+    }
+
+    if (event.status === "PAUSED") {
+      throw new AppError("Event is currently paused. Please try again later.", 403);
+    }
+
+    if (event.status === "CANCELLED") {
+      throw new AppError("Event has been cancelled", 400);
+    }
+
+    if (event.status === "ENDED") {
+      throw new AppError("Event has already ended", 400);
+    }
+
+    // Only APPROVED, PUBLISHED, LIVE, and NOMINATING (for some cases) allowed generally
+    // But for payments, we strictly need PUBLISHED or LIVE
+    const allowedStatuses = ["PUBLISHED", "LIVE"];
+    if (!allowedStatuses.includes(event.status)) {
+      throw new AppError(`Event is not open for ${type === 'TICKETING' ? 'ticket purchases' : 'voting'} at this time`, 400);
+    }
+  }
 
   static async initializeTicketPurchase(data: any) {
     console.log(`[PurchaseService] initializeTicketPurchase called with:`, JSON.stringify(data, null, 2));
     const event = await Event.findById(data.eventId);
-    if (!event) {
-      throw new AppError("Event not found", 404);
-    }
-
-    if (event.status !== "PUBLISHED" && event.status !== "LIVE") {
-      throw new AppError("Event not available for ticket purchase", 400);
-    }
+    this.validateEventAvailability(event, 'TICKETING');
 
     const ticketType = event.ticketTypes?.find(tt => tt._id?.toString() === data.ticketTypeId);
     if (!ticketType) {
@@ -120,13 +150,7 @@ export class PurchaseService {
   static async initializeVotePurchase(data: any) {
     console.log(`[PurchaseService] initializeVotePurchase called with:`, JSON.stringify(data, null, 2));
     const event = await Event.findById(data.eventId);
-    if (!event) {
-      throw new AppError("Event not found", 404);
-    }
-
-    if (event.status !== "PUBLISHED" && event.status !== "LIVE") {
-      throw new AppError("Event not available for voting", 400);
-    }
+    this.validateEventAvailability(event, 'VOTING');
 
     // Check voting time window
     const now = new Date();
@@ -667,13 +691,7 @@ export class PurchaseService {
     source: "ussd";
   }) {
     const event = await Event.findById(data.eventId);
-    if (!event) {
-      throw new AppError("Event not found", 404);
-    }
-
-    if (event.status !== "PUBLISHED" && event.status !== "LIVE") {
-      throw new AppError("Event not available for ticket purchase", 400);
-    }
+    this.validateEventAvailability(event, 'TICKETING');
 
     const ticketType = event.ticketTypes?.find(tt => tt._id?.toString() === data.ticketTypeId);
     if (!ticketType) {
@@ -746,13 +764,7 @@ export class PurchaseService {
     source: "ussd";
   }) {
     const event = await Event.findById(data.eventId);
-    if (!event) {
-      throw new AppError("Event not found", 404);
-    }
-
-    if (event.status !== "PUBLISHED" && event.status !== "LIVE") {
-      throw new AppError("Event not available for voting", 400);
-    }
+    this.validateEventAvailability(event, 'VOTING');
 
     const now = new Date();
     const votingStart = event.votingStartTime || event.startDate;
