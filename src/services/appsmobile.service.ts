@@ -11,12 +11,13 @@ export class AppsMobileService implements IPaymentGateway {
   private readonly serviceId = process.env.APPS_MOBILE_SERVICE_ID;
 
   private generateSignature(payload: string): string {
-    return crypto.createHmac('sha256', this.clientSecret!).update(payload).digest('hex');
+    return crypto.createHmac('sha256', this.clientSecret!).update(payload).digest('hex').toUpperCase();
   }
 
   private getAuthHeader(payload: string): string {
     const signature = this.generateSignature(payload);
-    return `${this.clientId}:${signature}`;
+    const authString = `${this.clientId}:${signature}`;
+    return `Basic ${Buffer.from(authString).toString('base64')}`;
   }
 
   async initializePayment(data: PaymentInitializationData): Promise<PaymentInitializationResult> {
@@ -157,7 +158,7 @@ export class AppsMobileService implements IPaymentGateway {
       
       const response = await axios.post(
         `${this.orchardURL}/sendRequest`,
-        payload,
+        payloadString,
         {
           headers: {
             "Authorization": this.getAuthHeader(payloadString),

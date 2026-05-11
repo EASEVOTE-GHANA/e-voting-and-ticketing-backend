@@ -46,31 +46,43 @@ export class NominationService {
 
     const isOrganizer = userId && event.organizerId.toString() === userId;
 
-    // Allow fetching the form configuration even if the event is not yet open, 
-    // as long as public nominations are enabled for the event.
-    // Submission will still be blocked by the status check in submitNomination.
+    // 1. Check if public nominations are enabled for non-organizers
     if (!isOrganizer) {
       if (!event.allowPublicNominations) {
-        throw new AppError("Public nominations not enabled for this event", 400);
+        return null; // Silently return null instead of 404
+      }
+
+      // 2. Enforce nomination dates for non-organizers
+      const now = new Date();
+      if (event.nominationStartDate && now < event.nominationStartDate) {
+        return null;
+      }
+      if (event.nominationEndDate && now > event.nominationEndDate) {
+        return null;
       }
     }
 
-    // Enforce nomination dates
-    const now = new Date();
-    if (event.nominationStartDate && now < event.nominationStartDate) {
-      throw new AppError("Nominations have not started yet", 400);
-    }
-    if (event.nominationEndDate && now > event.nominationEndDate) {
-      throw new AppError("Nominations have ended", 400);
-    }
-
+    // 3. Find the form configuration
     const form = await NominationForm.findOne({ eventId });
+    if (!form) {
+      // If no form exists and we're not the organizer, return null
+      if (!isOrganizer) {
+        return null;
+      }
+      // If organizer, we can return the event info with empty fields so they can see the "Add Question" UI
+      return {
+        eventId: event._id,
+        eventTitle: event.title,
+        categories: event.categories?.map(cat => ({ _id: cat._id, name: cat.name })) || [],
+        customFields: []
+      };
+    }
 
     return {
       eventId: event._id,
       eventTitle: event.title,
       categories: event.categories?.map(cat => ({ _id: cat._id, name: cat.name })) || [],
-      customFields: form?.customFields || []
+      customFields: form.customFields || []
     };
   }
 
