@@ -742,7 +742,7 @@ export class PurchaseService {
       reference,
       network: data.network,
       customerPhone: data.customerPhone,
-      callback_url: `${process.env.API_URL || 'https://api-dev.easevotegh.com'}/api/purchases/webhook/payment`,
+      callback_url: process.env.CALLBACK_URL || `${process.env.API_URL || 'https://api-dev.easevotegh.com'}/api/purchases/webhook/payment`,
       metadata: {
         purchaseId: purchase._id,
         eventId: data.eventId,
@@ -826,7 +826,7 @@ export class PurchaseService {
       reference,
       network: data.network,
       customerPhone: data.customerPhone,
-      callback_url: `${process.env.API_URL || 'https://api-dev.easevotegh.com'}/api/purchases/webhook/payment`,
+      callback_url: process.env.CALLBACK_URL || `${process.env.API_URL || 'https://api-dev.easevotegh.com'}/api/purchases/webhook/payment`,
       metadata: {
         purchaseId: purchase._id,
         eventId: data.eventId,
