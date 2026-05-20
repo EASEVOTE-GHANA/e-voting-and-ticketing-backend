@@ -4,7 +4,7 @@
   "description": "",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
-    "build": "tsc && cp -r src/templates dist/",
+    "build": "tsc && cp -r src/templates dist/ && cp -r public dist/",
     "start": "node dist/server.js"
   },
   "keywords": [],

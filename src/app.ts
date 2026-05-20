@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import mongoose from "mongoose";
 import path from "path";
+import fs from "fs";
 import authRoutes from "./routes/auth.routes";
 import adminRoutes from "./routes/admin.routes";
 import blogRoutes from "./routes/blog.routes";
@@ -27,11 +28,16 @@ app.use(cors());
 app.use(helmet());
 app.use(express.json());
 
+// Safely resolve public directory for both dev and prod
+const publicPath = fs.existsSync(path.join(__dirname, "../public/index.html"))
+  ? path.join(__dirname, "../public") // Dev environment
+  : path.join(__dirname, "public");   // Prod environment (dist/public)
+
 // Serve static files (API Landing Page)
-app.use(express.static(path.join(process.cwd(), "public")));
+app.use(express.static(publicPath));
 
 app.get("/", (req, res) => {
-  res.sendFile(path.join(process.cwd(), "public", "index.html"));
+  res.sendFile(path.join(publicPath, "index.html"));
 });
 
 app.get("/api/health", (req, res) => {
