@@ -40,12 +40,13 @@ export class SMSService {
     });
   }
 
-  static async sendTicketConfirmation(phone: string, eventTitle: string, ticketCount: number) {
+  static async sendTicketConfirmation(phone: string, eventTitle: string, ticketCount: number, reference: string) {
     const service = this.getService();
+    const link = `${process.env.FRONTEND_URL}/receipt/${reference}`;
     
     return service.sendSMS({
       to: phone,
-      message: `Ticket purchase confirmed! ${ticketCount} ticket(s) for "${eventTitle}". Check your email for details.`,
+      message: `Ticket confirmed! ${ticketCount} ticket(s) for "${eventTitle}". View your tickets here: ${link}`,
     });
   }
 

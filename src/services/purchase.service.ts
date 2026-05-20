@@ -382,7 +382,8 @@ export class PurchaseService {
           await SMSService.sendTicketConfirmation(
             purchase.customerPhone,
             event.title,
-            purchase.ticketQuantity || 0
+            purchase.ticketQuantity || 0,
+            purchase.paymentReference
           );
         }
       } else if (purchase.type === "VOTE") {

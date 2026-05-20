@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import mongoose from "mongoose";
+import path from "path";
 import authRoutes from "./routes/auth.routes";
 import adminRoutes from "./routes/admin.routes";
 import blogRoutes from "./routes/blog.routes";
@@ -25,6 +26,9 @@ const app = express();
 app.use(cors());
 app.use(helmet());
 app.use(express.json());
+
+// Serve static files (API Landing Page)
+app.use(express.static(path.join(__dirname, "../public")));
 
 app.get("/api/health", (req, res) => {
   const healthStatus = {

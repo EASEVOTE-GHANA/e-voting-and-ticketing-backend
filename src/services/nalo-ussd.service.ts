@@ -256,13 +256,13 @@ export class NaloUSSDService implements IUSSDService {
 
     globalSessions.delete(sessionId);
 
-    // Return empty message to close USSD session silently
+    // Return a brief thank you message and close the USSD session
     // so the MoMo payment prompt can take over the screen
     return {
       USERID: request.USERID,
       MSISDN: request.MSISDN,
       USERDATA: request.USERDATA,
-      MSG: "",
+      MSG: "Thank you. Please complete the payment prompt.",
       MSGTYPE: false
     };
   }
@@ -425,13 +425,13 @@ export class NaloUSSDService implements IUSSDService {
 
     globalSessions.delete(sessionId);
 
-    // Return empty message to close USSD session silently
+    // Return a brief thank you message and close the USSD session
     // so the MoMo payment prompt can take over the screen
     return {
       USERID: request.USERID,
       MSISDN: request.MSISDN,
       USERDATA: request.USERDATA,
-      MSG: "",
+      MSG: "Thank you. Please complete the payment prompt.",
       MSGTYPE: false
     };
   }
