@@ -11,6 +11,6 @@ export const handleUSSDRequest = asyncHandler(async (req: Request, res: Response
   };
 
   const response = await USSDService.handleRequest(ussdRequest);
-  
+
   res.json(response);
 });

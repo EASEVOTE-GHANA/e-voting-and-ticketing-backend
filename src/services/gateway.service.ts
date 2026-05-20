@@ -12,6 +12,8 @@ export class GatewayService {
     const defaults = [
       { provider: "paystack", type: "WEB", isPrimary: true },
       { provider: "appsmobile", type: "WEB", isPrimary: false },
+      { provider: "moolre", type: "WEB", isPrimary: false },
+      { provider: "moolre", type: "USSD", isPrimary: false },
       { provider: "appsmobile", type: "USSD", isPrimary: true },
     ];
 

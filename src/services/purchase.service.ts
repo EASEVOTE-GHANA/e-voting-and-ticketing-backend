@@ -4,6 +4,7 @@ import { ITicket, Ticket } from "../models/Ticket.model";
 import { Settings } from "../models/Settings.model";
 import { PaystackService } from "./paystack.service";
 import { AppsMobileService } from "./appsmobile.service";
+import { MoolreService } from "./moolre.service";
 import { AppError } from "../middleware/error.middleware";
 import { PaginationHelper } from "../utils/pagination.util";
 import { GatewayService } from "./gateway.service";
@@ -15,7 +16,7 @@ import { IPurchase } from "../models/Purchase.model";
 import { IPaymentGateway, PaymentVerificationResult } from "../payment-gateway.interface";
 import mongoose, { HydratedDocument } from "mongoose";
 
-type PaymentGateway = 'paystack' | 'appsmobile';
+type PaymentGateway = 'paystack' | 'appsmobile' | 'moolre';
 
 export class PurchaseService {
   private static async getDefaultGateway(): Promise<PaymentGateway> {
@@ -28,6 +29,8 @@ export class PurchaseService {
         return new PaystackService();
       case 'appsmobile':
         return new AppsMobileService();
+      case 'moolre':
+        return new MoolreService();
       default:
         return new PaystackService();
     }
@@ -565,7 +568,9 @@ export class PurchaseService {
     // Simple gateway detection based on headers
     if (req.headers['x-paystack-signature']) {
       gateway = 'paystack';
-    } else if (req.body.trans_status) {
+    } else if (req.body?.data?.txstatus !== undefined && req.body?.data?.externalref) {
+      gateway = 'moolre';
+    } else if (req.body?.trans_status) {
       gateway = 'appsmobile';
     }
     
@@ -737,7 +742,7 @@ export class PurchaseService {
       reference,
       network: data.network,
       customerPhone: data.customerPhone,
-      callback_url: `${process.env.FRONTEND_URL}/payment/callback`,
+      callback_url: `${process.env.API_URL || 'https://api-dev.easevotegh.com'}/api/purchases/webhook/payment`,
       metadata: {
         purchaseId: purchase._id,
         eventId: data.eventId,
@@ -821,7 +826,7 @@ export class PurchaseService {
       reference,
       network: data.network,
       customerPhone: data.customerPhone,
-      callback_url: `${process.env.FRONTEND_URL}/payment/callback`,
+      callback_url: `${process.env.API_URL || 'https://api-dev.easevotegh.com'}/api/purchases/webhook/payment`,
       metadata: {
         purchaseId: purchase._id,
         eventId: data.eventId,

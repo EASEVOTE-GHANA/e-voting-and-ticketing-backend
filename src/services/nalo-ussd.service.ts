@@ -238,40 +238,33 @@ export class NaloUSSDService implements IUSSDService {
       };
     }
 
-    try {
-      const { event, candidate, categoryId, voteCount, network } = session.data;
+    const { event, candidate, categoryId, voteCount, network } = session.data;
 
-      // Initialize vote purchase with USSD source
-      const result = await PurchaseService.initializeVotePurchaseUSSD({
-        eventId: event._id.toString(),
-        candidateId: candidate._id.toString(),
-        categoryId,
-        voteCount,
-        customerPhone: request.MSISDN,
-        network,
-        source: 'ussd'
-      });
+    // Fire payment initiation in background — don't await so USSD session
+    // closes immediately and the MoMo prompt can appear without interference
+    PurchaseService.initializeVotePurchaseUSSD({
+      eventId: event._id.toString(),
+      candidateId: candidate._id.toString(),
+      categoryId,
+      voteCount,
+      customerPhone: request.MSISDN,
+      network,
+      source: 'ussd'
+    }).catch((error: any) => {
+      console.error(`[USSD] Background vote payment failed for ${request.MSISDN}:`, error);
+    });
 
-      globalSessions.delete(sessionId);
+    globalSessions.delete(sessionId);
 
-      return {
-        USERID: request.USERID,
-        MSISDN: request.MSISDN,
-        USERDATA: request.USERDATA,
-        MSG: `Payment initiated for ${voteCount} vote(s)\nAmount: ${session.data.totalAmount}\nRef: ${result.reference}\nComplete payment to confirm your vote.`,
-        MSGTYPE: false
-      };
-    } catch (error: any) {
-      console.error(`[USSD] Vote initiation failed for ${request.MSISDN}:`, error);
-      globalSessions.delete(sessionId);
-      return {
-        USERID: request.USERID,
-        MSISDN: request.MSISDN,
-        USERDATA: request.USERDATA,
-        MSG: "Something went wrong. Please try again later.",
-        MSGTYPE: false
-      };
-    }
+    // Return empty message to close USSD session silently
+    // so the MoMo payment prompt can take over the screen
+    return {
+      USERID: request.USERID,
+      MSISDN: request.MSISDN,
+      USERDATA: request.USERDATA,
+      MSG: "",
+      MSGTYPE: false
+    };
   }
 
   private async handleEventCode(request: USSDRequest, session: USSDSession): Promise<USSDResponse> {
@@ -415,38 +408,31 @@ export class NaloUSSDService implements IUSSDService {
       };
     }
 
-    try {
-      const { event, ticketTypeId, quantity, network } = session.data;
+    const { event, ticketTypeId, quantity, network } = session.data;
 
-      // Initialize ticket purchase with USSD source
-      const result = await PurchaseService.initializeTicketPurchaseUSSD({
-        eventId: event._id.toString(),
-        ticketTypeId: ticketTypeId.toString(),
-        quantity,
-        customerPhone: request.MSISDN,
-        network,
-        source: 'ussd'
-      });
+    // Fire payment initiation in background — don't await so USSD session
+    // closes immediately and the MoMo prompt can appear without interference
+    PurchaseService.initializeTicketPurchaseUSSD({
+      eventId: event._id.toString(),
+      ticketTypeId: ticketTypeId.toString(),
+      quantity,
+      customerPhone: request.MSISDN,
+      network,
+      source: 'ussd'
+    }).catch((error: any) => {
+      console.error(`[USSD] Background ticket payment failed for ${request.MSISDN}:`, error);
+    });
 
-      globalSessions.delete(sessionId);
+    globalSessions.delete(sessionId);
 
-      return {
-        USERID: request.USERID,
-        MSISDN: request.MSISDN,
-        USERDATA: request.USERDATA,
-        MSG: `Payment initiated for ${quantity} ticket(s)\nRef: ${result.reference}\nComplete payment to get your tickets.`,
-        MSGTYPE: false
-      };
-    } catch (error: any) {
-      console.error(`[USSD] Ticket initiation failed for ${request.MSISDN}:`, error);
-      globalSessions.delete(sessionId);
-      return {
-        USERID: request.USERID,
-        MSISDN: request.MSISDN,
-        USERDATA: request.USERDATA,
-        MSG: "Something went wrong. Please try again later.",
-        MSGTYPE: false
-      };
-    }
+    // Return empty message to close USSD session silently
+    // so the MoMo payment prompt can take over the screen
+    return {
+      USERID: request.USERID,
+      MSISDN: request.MSISDN,
+      USERDATA: request.USERDATA,
+      MSG: "",
+      MSGTYPE: false
+    };
   }
 }
