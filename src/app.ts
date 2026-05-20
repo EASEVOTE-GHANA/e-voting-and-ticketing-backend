@@ -28,7 +28,11 @@ app.use(helmet());
 app.use(express.json());
 
 // Serve static files (API Landing Page)
-app.use(express.static(path.join(__dirname, "../public")));
+app.use(express.static(path.join(process.cwd(), "public")));
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(process.cwd(), "public", "index.html"));
+});
 
 app.get("/api/health", (req, res) => {
   const healthStatus = {
