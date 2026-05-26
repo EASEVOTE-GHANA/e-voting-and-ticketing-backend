@@ -31,12 +31,12 @@ export class SMSService {
     });
   }
 
-  static async sendVoteConfirmation(phone: string, candidateName: string, voteCount: number) {
+  static async sendVoteConfirmation(phone: string, amount: number, voteCount: number, candidateName: string, categoryName: string) {
     const service = this.getService();
     
     return service.sendSMS({
       to: phone,
-      message: `Vote confirmed! You voted ${voteCount} time(s) for ${candidateName}. Thank you for participating!`,
+      message: `Vote confirmed! You voted GHS ${amount} for ${voteCount} time(s) for ${candidateName} (${categoryName}). Thank you! For support, call 0559540992`,
     });
   }
 
