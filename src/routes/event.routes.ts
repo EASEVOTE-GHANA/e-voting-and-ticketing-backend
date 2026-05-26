@@ -7,6 +7,8 @@ import {
   updateEvent,
   getEvent,
   getEvents,
+  getUpcomingEvents,
+  getCompletedEvents,
   getMyEvents,
   getAllEventsForAdmin,
   getDeletedEvents,
@@ -39,6 +41,8 @@ import {
 const router = Router();
 
 // Public routes (with optional authentication for access control)
+router.get("/upcoming", optionalAuthenticate, getUpcomingEvents);
+router.get("/completed", optionalAuthenticate, getCompletedEvents);
 router.get("/", optionalAuthenticate, getEvents);
 router.get("/:id", optionalAuthenticate, getEvent);
 router.get("/:id/categories", optionalAuthenticate, getEventCategories);

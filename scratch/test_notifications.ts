@@ -51,7 +51,7 @@ async function testNotifications() {
 
     // 3. Test SMS
     console.log("Sending test SMS (Mocked if keys are missing)...");
-    await SMSService.sendTicketConfirmation(testPhone, "Grand Annual Concert 2026", 2);
+    await SMSService.sendTicketConfirmation(testPhone, "Grand Annual Concert 2026", 2, "TEST_REF_123");
     console.log("SMS sent successfully!");
 
   } catch (error) {
