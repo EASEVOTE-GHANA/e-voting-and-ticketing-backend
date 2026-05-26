@@ -42,6 +42,21 @@ export class EventService {
     return `${eventCode}${nextNumber}`;
   }
 
+  static getNextCandidateNumber(event: any): number {
+    let maxNumber = 0;
+    event.categories?.forEach((cat: any) => {
+      cat.candidates?.forEach((cand: any) => {
+        if (cand.code && cand.code.startsWith(event.eventCode)) {
+          const num = parseInt(cand.code.substring(event.eventCode.length), 10);
+          if (!isNaN(num) && num > maxNumber) {
+            maxNumber = num;
+          }
+        }
+      });
+    });
+    return maxNumber + 1;
+  }
+
   static filterEventResponse(event: any, userId?: string, userRole?: string) {
     const eventObj = event.toObject ? event.toObject() : event;
     
@@ -337,6 +352,60 @@ export class EventService {
     const filteredEvents = events.map(event => this.filterEventResponse(event, userId, userRole));
 
     // Decorate with live ledger stats to eliminate cached/sync issues
+    const decoratedEvents = await this.appendLedgerStats(filteredEvents);
+
+    return PaginationHelper.formatResponse(decoratedEvents, total, page, limit);
+  }
+
+  static async getUpcomingEvents(query?: any) {
+    let dbQuery: any = { 
+      isDeleted: false,
+      isPublic: true,
+      status: { $in: ["PUBLISHED", "NOMINATING", "LIVE"] },
+      endDate: { $gt: new Date() } // Hasn't ended yet
+    };
+    if (query?.type) dbQuery.type = query.type;
+
+    const { page, limit, skip } = PaginationHelper.getParams(query || {});
+    
+    const [events, total] = await Promise.all([
+      Event.find(dbQuery)
+        .populate("organizerId", "fullName email")
+        .sort({ startDate: 1 })
+        .skip(skip)
+        .limit(limit),
+      Event.countDocuments(dbQuery)
+    ]);
+    
+    const filteredEvents = events.map(event => this.filterEventResponse(event));
+    const decoratedEvents = await this.appendLedgerStats(filteredEvents);
+
+    return PaginationHelper.formatResponse(decoratedEvents, total, page, limit);
+  }
+
+  static async getCompletedEvents(query?: any) {
+    let dbQuery: any = { 
+      isDeleted: false,
+      isPublic: true,
+      $or: [
+        { status: "ENDED" },
+        { endDate: { $lte: new Date() } }
+      ]
+    };
+    if (query?.type) dbQuery.type = query.type;
+
+    const { page, limit, skip } = PaginationHelper.getParams(query || {});
+    
+    const [events, total] = await Promise.all([
+      Event.find(dbQuery)
+        .populate("organizerId", "fullName email")
+        .sort({ endDate: -1 })
+        .skip(skip)
+        .limit(limit),
+      Event.countDocuments(dbQuery)
+    ]);
+    
+    const filteredEvents = events.map(event => this.filterEventResponse(event));
     const decoratedEvents = await this.appendLedgerStats(filteredEvents);
 
     return PaginationHelper.formatResponse(decoratedEvents, total, page, limit);

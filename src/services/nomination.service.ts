@@ -265,8 +265,8 @@ export class NominationService {
     }
 
     // Create new candidate
-    const totalCandidates = event.categories?.reduce((acc, cat) => acc + (cat.candidates?.length || 0), 0) || 0;
-    const candidateCode = EventService.generateCandidateCode(event.eventCode, totalCandidates + 1);
+    const nextNumber = EventService.getNextCandidateNumber(event);
+    const candidateCode = EventService.generateCandidateCode(event.eventCode, nextNumber);
     const newCandidate = {
       name: nomination.nomineeName,
       email: nomination.email || "", // Match email from nomination

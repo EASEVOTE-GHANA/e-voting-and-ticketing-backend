@@ -38,8 +38,8 @@ export class CandidateService {
       throw new AppError("Category not found", 404);
     }
 
-    const totalCandidates = event.categories?.reduce((acc, cat) => acc + (cat.candidates?.length || 0), 0) || 0;
-    const candidateCode = EventService.generateCandidateCode(event.eventCode, totalCandidates + 1);
+    const nextNumber = EventService.getNextCandidateNumber(event);
+    const candidateCode = EventService.generateCandidateCode(event.eventCode, nextNumber);
     const { code: _ignored, ...safeData } = candidateData;
     const newCandidate = {
       ...safeData,

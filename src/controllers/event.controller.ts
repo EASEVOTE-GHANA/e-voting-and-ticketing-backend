@@ -28,6 +28,16 @@ export const getEvents = asyncHandler(async (req: Request, res: Response) => {
   res.json(events);
 });
 
+export const getUpcomingEvents = asyncHandler(async (req: Request, res: Response) => {
+  const events = await EventService.getUpcomingEvents(req.query);
+  res.json(events);
+});
+
+export const getCompletedEvents = asyncHandler(async (req: Request, res: Response) => {
+  const events = await EventService.getCompletedEvents(req.query);
+  res.json(events);
+});
+
 export const getMyEvents = asyncHandler(async (req: Request, res: Response) => {
   const events = await EventService.getMyEvents(req.user!.id, req.query);
   res.json(events);
