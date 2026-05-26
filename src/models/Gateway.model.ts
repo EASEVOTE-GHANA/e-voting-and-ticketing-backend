@@ -1,6 +1,6 @@
 import mongoose, { Document, Schema } from "mongoose";
 
-export type GatewayProvider = "paystack" | "appsmobile" | "moolre";
+export type GatewayProvider = "paystack" | "appsmobile" | "moolre" | "nalo";
 export type GatewayType = "WEB" | "USSD";
 
 export interface IGateway extends Document {
@@ -18,7 +18,7 @@ const gatewaySchema = new Schema<IGateway>(
     provider: {
       type: String,
       required: true,
-      enum: ["paystack", "appsmobile", "moolre"],
+      enum: ["paystack", "appsmobile", "moolre", "nalo"],
     },
     type: {
       type: String,

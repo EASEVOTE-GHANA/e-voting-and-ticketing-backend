@@ -5,6 +5,7 @@ import { Settings } from "../models/Settings.model";
 import { PaystackService } from "./paystack.service";
 import { AppsMobileService } from "./appsmobile.service";
 import { MoolreService } from "./moolre.service";
+import { NaloPaymentService } from "./nalo-payment.service";
 import { AppError } from "../middleware/error.middleware";
 import { PaginationHelper } from "../utils/pagination.util";
 import { GatewayService } from "./gateway.service";
@@ -16,7 +17,7 @@ import { IPurchase } from "../models/Purchase.model";
 import { IPaymentGateway, PaymentVerificationResult } from "../payment-gateway.interface";
 import mongoose, { HydratedDocument } from "mongoose";
 
-type PaymentGateway = 'paystack' | 'appsmobile' | 'moolre';
+type PaymentGateway = 'paystack' | 'appsmobile' | 'moolre' | 'nalo';
 
 export class PurchaseService {
   private static async getDefaultGateway(): Promise<PaymentGateway> {
@@ -31,6 +32,8 @@ export class PurchaseService {
         return new AppsMobileService();
       case 'moolre':
         return new MoolreService();
+      case 'nalo':
+        return new NaloPaymentService();
       default:
         return new PaystackService();
     }
@@ -599,6 +602,8 @@ export class PurchaseService {
       gateway = 'moolre';
     } else if (req.body?.trans_status) {
       gateway = 'appsmobile';
+    } else if (req.body?.order_id && req.body?.status) {
+      gateway = 'nalo';
     }
     
     const gatewayService = this.getGatewayService(gateway);
