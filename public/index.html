@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EaseVote API</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #38bdf8;
+            --success: #10b981;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 90%;
+            margin: 40px auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin: 0;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -1px;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            margin-top: 10px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            margin-bottom: 24px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 1.5rem;
+            color: var(--text-main);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 10px;
+        }
+
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        li {
+            margin-bottom: 12px;
+            position: relative;
+            padding-left: 24px;
+        }
+
+        li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: var(--primary);
+        }
+
+        .code-block {
+            background-color: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            color: var(--accent);
+            word-wrap: break-word;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-top: 15px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--success);
+            border-radius: 50%;
+            margin-right: 8px;
+            box-shadow: 0 0 8px var(--success);
+        }
+
+        .btn {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 15px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+        }
+
+        .footer {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-top: 50px;
+        }
+
+        a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>EaseVote API</h1>
+            <div class="subtitle">The core backend infrastructure powering the EaseVote platform</div>
+            <div class="status-badge">
+                <span class="status-dot"></span> All Systems Operational
+            </div>
+        </header>
+
+        <div class="card">
+            <h2>Welcome</h2>
+            <p>You have successfully reached the EaseVote API service. This API handles user authentication, event management, voting, ticketing, USSD interactions, and payment processing.</p>
+            <p><strong>Base URL:</strong> <span class="code-block">https://api-dev.easevotegh.com/api</span></p>
+        </div>
+
+        <div class="card">
+            <h2>Core Modules</h2>
+            <ul>
+                <li><strong>Events:</strong> Manage voting and ticketing events</li>
+                <li><strong>Purchasing:</strong> Process payments via Mobile Money, Card, and USSD</li>
+                <li><strong>USSD:</strong> Direct integration with NALO and Apps&Mobile</li>
+                <li><strong>Ticketing:</strong> Generate, send, and verify QR-code tickets</li>
+                <li><strong>Notifications:</strong> SMS and Email receipts for users</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h2>Documentation</h2>
+            <p>For detailed endpoint definitions, authentication requirements, and payload structures, please refer to our official API documentation.</p>
+            <a href="https://postman.com/" class="btn" target="_blank" rel="noopener noreferrer">View Official Docs (Postman)</a>
+        </div>
+
+        <div class="footer">
+            &copy; <script>document.write(new Date().getFullYear())</script> EaseVote Ghana. All rights reserved. <br>
+            Need help? Contact <a href="mailto:info@easevotegh.com">info@easevotegh.com</a>
+        </div>
+    </div>
+</body>
+</html>

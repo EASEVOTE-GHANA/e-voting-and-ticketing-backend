@@ -9,12 +9,18 @@ export class NaloSMSService implements ISMSService {
 
   async sendSMS(data: SMSData): Promise<SMSResult> {
     try {
+      // Format phone to 233 format if it starts with 0
+      let formattedPhone = data.to;
+      if (formattedPhone.startsWith('0') && formattedPhone.length === 10) {
+        formattedPhone = '233' + formattedPhone.substring(1);
+      }
+
       const response = await axios.post(
         `${this.baseURL}/send-message/`,
         {
           username: this.username,
           password: this.password,
-          msisdn: data.to,
+          msisdn: formattedPhone,
           message: data.message,
           sender_id: this.senderId,
         },

@@ -10,13 +10,17 @@ export class AppsMobileService implements IPaymentGateway {
   private readonly clientSecret = process.env.APPS_MOBILE_CLIENT_SECRET;
   private readonly serviceId = process.env.APPS_MOBILE_SERVICE_ID;
 
-  private generateSignature(payload: string): string {
-    return crypto.createHmac('sha256', this.clientSecret!).update(payload).digest('hex').toUpperCase();
+  private generateSignature(payload: string, isOrchard: boolean = false): string {
+    const hmac = crypto.createHmac('sha256', this.clientSecret!).update(payload).digest('hex');
+    return isOrchard ? hmac.toLowerCase() : hmac.toUpperCase();
   }
 
-  private getAuthHeader(payload: string): string {
-    const signature = this.generateSignature(payload);
+  private getAuthHeader(payload: string, isOrchard: boolean = false): string {
+    const signature = this.generateSignature(payload, isOrchard);
     const authString = `${this.clientId}:${signature}`;
+    if (isOrchard) {
+      return authString; // Plain unencoded format: CLIENT_ID:SIGNATURE
+    }
     return `Basic ${Buffer.from(authString).toString('base64')}`;
   }
 
@@ -42,7 +46,7 @@ export class AppsMobileService implements IPaymentGateway {
         payload,
         {
           headers: {
-            "Authorization": this.getAuthHeader(payloadString),
+            "Authorization": this.getAuthHeader(payloadString, false),
             "Content-Type": "application/json",
           },
         }
@@ -68,17 +72,18 @@ export class AppsMobileService implements IPaymentGateway {
       const payload = {
         exttrid: reference,
         trans_type: "TSC",
-        service_id: this.serviceId
+        service_id: this.serviceId ? parseInt(this.serviceId, 10) : 0
       };
 
       const payloadString = JSON.stringify(payload);
       
+      // Orchard transactions use orchardURL/checkTransaction with plain credentials
       const response = await axios.post(
-        `${this.baseURL}/checkTransaction`,
-        payload,
+        `${this.orchardURL}/checkTransaction`,
+        payloadString,
         {
           headers: {
-            "Authorization": this.getAuthHeader(payloadString),
+            "Authorization": this.getAuthHeader(payloadString, true),
             "Content-Type": "application/json",
           },
         }
@@ -147,7 +152,7 @@ export class AppsMobileService implements IPaymentGateway {
         nw: this.mapNetworkCode(data.network),
         trans_type: "CTM",
         callback_url: data.callback_url,
-        service_id: this.serviceId,
+        service_id: this.serviceId ? parseInt(this.serviceId, 10) : 0,
         ts: new Date().toISOString().replace('T', ' ').substring(0, 19),
         nickname: "EaseVote"
       };
@@ -161,7 +166,7 @@ export class AppsMobileService implements IPaymentGateway {
         payloadString,
         {
           headers: {
-            "Authorization": this.getAuthHeader(payloadString),
+            "Authorization": this.getAuthHeader(payloadString, true),
             "Content-Type": "application/json",
           },
         }

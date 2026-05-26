@@ -31,7 +31,7 @@ export class AnalyticsService {
         Promise.all([
           User.countDocuments(),
           User.countDocuments({ role: "ORGANIZER" }),
-          Event.countDocuments({ status: { $in: ["LIVE", "PUBLISHED", "APPROVED", "Live", "Upcoming"] } }),
+          Event.countDocuments({ status: { $in: ["LIVE", "PUBLISHED", "APPROVED"] } }),
           Purchase.aggregate([
             { $match: { status: "PAID" } },
             { 

@@ -4,6 +4,7 @@ import { ITicket, Ticket } from "../models/Ticket.model";
 import { Settings } from "../models/Settings.model";
 import { PaystackService } from "./paystack.service";
 import { AppsMobileService } from "./appsmobile.service";
+import { MoolreService } from "./moolre.service";
 import { AppError } from "../middleware/error.middleware";
 import { PaginationHelper } from "../utils/pagination.util";
 import { GatewayService } from "./gateway.service";
@@ -15,7 +16,7 @@ import { IPurchase } from "../models/Purchase.model";
 import { IPaymentGateway, PaymentVerificationResult } from "../payment-gateway.interface";
 import mongoose, { HydratedDocument } from "mongoose";
 
-type PaymentGateway = 'paystack' | 'appsmobile';
+type PaymentGateway = 'paystack' | 'appsmobile' | 'moolre';
 
 export class PurchaseService {
   private static async getDefaultGateway(): Promise<PaymentGateway> {
@@ -28,6 +29,8 @@ export class PurchaseService {
         return new PaystackService();
       case 'appsmobile':
         return new AppsMobileService();
+      case 'moolre':
+        return new MoolreService();
       default:
         return new PaystackService();
     }
@@ -106,6 +109,8 @@ export class PurchaseService {
     // Hold tickets for 30.5 minutes (Paystack URL expires in 30 minutes)
     const expiresAt = new Date(Date.now() + 30.5 * 60 * 1000);
 
+    const resolvedEmail = data.customerEmail || (data.customerPhone ? `${data.customerPhone}@web.easevote.com` : "voter@easevote.com");
+
     const purchase = await Purchase.create({
       eventId: data.eventId,
       userId: data.userId,
@@ -116,7 +121,7 @@ export class PurchaseService {
       ticketTypeId: data.ticketTypeId,
       ticketQuantity: data.quantity,
       expiresAt,
-      customerEmail: data.customerEmail,
+      customerEmail: resolvedEmail,
       customerName: data.customerName,
       customerPhone: data.customerPhone
     });
@@ -124,10 +129,10 @@ export class PurchaseService {
     const gateway = await this.getDefaultGateway();
     const gatewayService = this.getGatewayService(gateway);
     
-    console.log(`[PurchaseService] Initializing ticket purchase for ${data.customerEmail}. Event: ${data.eventId}, Amount: ${amount}, Reference: ${reference}, Gateway: ${gateway}`);
+    console.log(`[PurchaseService] Initializing ticket purchase for ${resolvedEmail}. Event: ${data.eventId}, Amount: ${amount}, Reference: ${reference}, Gateway: ${gateway}`);
     
     const paymentData = await gatewayService.initializePayment({
-      email: data.customerEmail,
+      email: resolvedEmail,
       amount,
       reference,
       callback_url: `${process.env.FRONTEND_URL}/payment/callback`,
@@ -137,7 +142,7 @@ export class PurchaseService {
         type: "TICKET",
         ticketTypeId: data.ticketTypeId,
         quantity: data.quantity,
-        customerEmail: data.customerEmail,
+        customerEmail: resolvedEmail,
         customerName: data.customerName,
         customerPhone: data.customerPhone,
         userId: data.userId
@@ -196,6 +201,8 @@ export class PurchaseService {
     // Hold votes for 30.5 minutes
     const expiresAt = new Date(Date.now() + 30.5 * 60 * 1000);
 
+    const resolvedEmail = data.customerEmail || (data.customerPhone ? `${data.customerPhone}@web.easevote.com` : "voter@easevote.com");
+
     const purchase = await Purchase.create({
       eventId: data.eventId,
       userId: data.userId,
@@ -207,7 +214,7 @@ export class PurchaseService {
       categoryId: data.categoryId,
       voteCount: data.voteCount,
       expiresAt,
-      customerEmail: data.customerEmail,
+      customerEmail: resolvedEmail,
       customerName: data.customerName,
       customerPhone: data.customerPhone
     });
@@ -215,10 +222,10 @@ export class PurchaseService {
     const gateway = await this.getDefaultGateway();
     const gatewayService = this.getGatewayService(gateway);
     
-    console.log(`[PurchaseService] Initializing vote purchase for ${data.customerEmail}. Event: ${data.eventId}, Amount: ${amount}, Reference: ${reference}, Gateway: ${gateway}`);
+    console.log(`[PurchaseService] Initializing vote purchase for ${resolvedEmail}. Event: ${data.eventId}, Amount: ${amount}, Reference: ${reference}, Gateway: ${gateway}`);
     
     const paymentData = await gatewayService.initializePayment({
-      email: data.customerEmail,
+      email: resolvedEmail,
       amount,
       reference,
       callback_url: `${process.env.FRONTEND_URL}/payment/callback`,
@@ -233,7 +240,7 @@ export class PurchaseService {
         categoryId: data.categoryId,
         voteCount: data.voteCount,
         quantity: data.voteCount, // Alias for frontend compatibility
-        customerEmail: data.customerEmail,
+        customerEmail: resolvedEmail,
         customerName: data.customerName,
         customerPhone: data.customerPhone,
         userId: data.userId
@@ -362,52 +369,75 @@ export class PurchaseService {
         }));
 
         // Send Email
-        await EmailService.sendTicketEmail({
-          to: purchase.customerEmail,
-          customerName: purchase.customerName || "Customer",
-          eventTitle: event.title,
-          eventDate: event.startDate.toDateString(),
-          venue: event.venue || "TBA",
-          tickets: ticketData,
-          totalAmount: purchase.amount,
-          reference: purchase.paymentReference,
-          eventImage: event.imageUrl
-        });
+        try {
+          await EmailService.sendTicketEmail({
+            to: purchase.customerEmail,
+            customerName: purchase.customerName || "Customer",
+            eventTitle: event.title,
+            eventDate: event.startDate.toDateString(),
+            venue: event.venue || "TBA",
+            tickets: ticketData,
+            totalAmount: purchase.amount,
+            reference: purchase.paymentReference,
+            eventImage: event.imageUrl
+          });
+        } catch (emailErr) {
+          console.error("Failed to send ticket email:", emailErr);
+        }
 
         // Send SMS
         if (purchase.customerPhone) {
-          await SMSService.sendTicketConfirmation(
-            purchase.customerPhone,
-            event.title,
-            purchase.ticketQuantity || 0
-          );
+          try {
+            await SMSService.sendTicketConfirmation(
+              purchase.customerPhone,
+              event.title,
+              purchase.ticketQuantity || 0,
+              purchase.paymentReference
+            );
+          } catch (smsErr) {
+            console.error("Failed to send ticket SMS:", smsErr);
+          }
         }
       } else if (purchase.type === "VOTE") {
         // Find candidate name
         let candidateName = "Candidate";
+        let categoryName = "Category";
         event.categories?.forEach(cat => {
           const cand = cat.candidates.find(c => c._id?.toString() === purchase.candidateId?.toString());
-          if (cand) candidateName = cand.name;
+          if (cand) {
+            candidateName = cand.name;
+            categoryName = cat.name;
+          }
         });
 
         // Send Email
-        await EmailService.sendVoteEmail({
-          to: purchase.customerEmail,
-          customerName: purchase.customerName || "Voter",
-          eventTitle: event.title,
-          candidateName: candidateName,
-          voteCount: purchase.voteCount || 0,
-          totalAmount: purchase.amount,
-          reference: purchase.paymentReference
-        });
+        try {
+          await EmailService.sendVoteEmail({
+            to: purchase.customerEmail,
+            customerName: purchase.customerName || "Voter",
+            eventTitle: event.title,
+            candidateName: candidateName,
+            voteCount: purchase.voteCount || 0,
+            totalAmount: purchase.amount,
+            reference: purchase.paymentReference
+          });
+        } catch (emailErr) {
+          console.error("Failed to send vote email:", emailErr);
+        }
 
         // Send SMS
         if (purchase.customerPhone) {
-          await SMSService.sendVoteConfirmation(
-            purchase.customerPhone,
-            candidateName,
-            purchase.voteCount || 0
-          );
+          try {
+            await SMSService.sendVoteConfirmation(
+              purchase.customerPhone,
+              purchase.amount,
+              purchase.voteCount || 0,
+              candidateName,
+              categoryName
+            );
+          } catch (smsErr) {
+            console.error("Failed to send vote SMS:", smsErr);
+          }
         }
       }
     } catch (err) {
@@ -565,7 +595,9 @@ export class PurchaseService {
     // Simple gateway detection based on headers
     if (req.headers['x-paystack-signature']) {
       gateway = 'paystack';
-    } else if (req.body.trans_status) {
+    } else if (req.body?.data?.txstatus !== undefined && req.body?.data?.externalref) {
+      gateway = 'moolre';
+    } else if (req.body?.trans_status) {
       gateway = 'appsmobile';
     }
     
@@ -737,7 +769,7 @@ export class PurchaseService {
       reference,
       network: data.network,
       customerPhone: data.customerPhone,
-      callback_url: `${process.env.FRONTEND_URL}/payment/callback`,
+      callback_url: process.env.CALLBACK_URL || `${process.env.API_URL || 'https://api-dev.easevotegh.com'}/api/purchases/webhook/payment`,
       metadata: {
         purchaseId: purchase._id,
         eventId: data.eventId,
@@ -821,7 +853,7 @@ export class PurchaseService {
       reference,
       network: data.network,
       customerPhone: data.customerPhone,
-      callback_url: `${process.env.FRONTEND_URL}/payment/callback`,
+      callback_url: process.env.CALLBACK_URL || `${process.env.API_URL || 'https://api-dev.easevotegh.com'}/api/purchases/webhook/payment`,
       metadata: {
         purchaseId: purchase._id,
         eventId: data.eventId,

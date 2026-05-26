@@ -4,7 +4,7 @@
   "description": "",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
-    "build": "tsc && cp -r src/templates dist/",
+    "build": "tsc && cp -r src/templates dist/ && cp -r public dist/",
     "start": "node dist/server.js"
   },
   "keywords": [],
@@ -25,7 +25,7 @@
   },
   "dependencies": {
     "@types/node-cron": "^3.0.11",
-    "axios": "^1.13.2",
+    "axios": "1.6.8",
     "bcrypt": "^6.0.0",
     "cloudinary": "^2.8.0",
     "cors": "^2.8.6",
