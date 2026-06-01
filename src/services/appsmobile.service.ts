@@ -26,13 +26,14 @@ export class AppsMobileService implements IPaymentGateway {
 
   async initializePayment(data: PaymentInitializationData): Promise<PaymentInitializationResult> {
     try {
+      const floatAmount = parseFloat(data.amount.toFixed(2));
       const payload = {
-        amount: data.amount.toFixed(2),
-        currency_val: "GHS",
+        amount: floatAmount,
+        currency_val: floatAmount,
         callback_url: data.callback_url,
         exttrid: data.reference,
         reference: "EaseVote Payment",
-        service_id: this.serviceId,
+        service_id: this.serviceId ? parseInt(this.serviceId, 10) : 0,
         nickname: "EaseVote",
         landing_page: `${process.env.FRONTEND_URL}/payment/success`,
         ts: new Date().toISOString().replace('T', ' ').substring(0, 19),
