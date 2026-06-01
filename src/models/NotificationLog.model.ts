@@ -2,7 +2,7 @@ import { Schema, model, Document } from "mongoose";
 
 export interface INotificationLog extends Document {
   senderId: Schema.Types.ObjectId;
-  recipientType: "ALL_ORGANIZERS" | "SELECTED_USERS";
+  recipientType: "ALL_ORGANIZERS" | "SELECTED_USERS" | "ALL_ADMINS" | "ALL_ADMINS_AND_ORGANIZERS";
   recipientCount: number;
   channels: ("EMAIL" | "SMS")[];
   subject?: string;
@@ -18,7 +18,7 @@ const NotificationLogSchema = new Schema<INotificationLog>(
     senderId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     recipientType: {
       type: String,
-      enum: ["ALL_ORGANIZERS", "SELECTED_USERS"],
+      enum: ["ALL_ORGANIZERS", "SELECTED_USERS", "ALL_ADMINS", "ALL_ADMINS_AND_ORGANIZERS"],
       required: true,
     },
     recipientCount: { type: Number, required: true },

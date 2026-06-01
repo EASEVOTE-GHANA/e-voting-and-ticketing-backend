@@ -47,7 +47,7 @@ export class BlogService {
 
     const [blogs, total] = await Promise.all([
       Blog.find(filter)
-        .populate("author", "fullName email")
+        .populate("author", "fullName email avatar")
         .sort({ publishedAt: -1, createdAt: -1 })
         .skip(skip)
         .limit(limit),
@@ -72,7 +72,7 @@ export class BlogService {
   }
 
   static async getAdminBlogById(id: string) {
-    const blog = await Blog.findById(id).populate("author", "fullName email");
+    const blog = await Blog.findById(id).populate("author", "fullName email avatar");
     if (!blog) throw new AppError("Blog post not found", 404);
     return blog;
   }

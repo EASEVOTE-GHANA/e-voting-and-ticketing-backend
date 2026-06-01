@@ -9,7 +9,7 @@ import { AppError } from "../middleware/error.middleware";
 
 export const sendManualNotification = asyncHandler(async (req: Request, res: Response) => {
   const { recipientType, selectedUserIds, channels, subject, content } = req.body;
-  const senderId = (req as any).user?._id;
+  const senderId = (req as any).user?.id;
 
   if (!channels || channels.length === 0) {
     throw new AppError("At least one channel (Email or SMS) must be selected", 400);
@@ -23,6 +23,10 @@ export const sendManualNotification = asyncHandler(async (req: Request, res: Res
 
   if (recipientType === "ALL_ORGANIZERS") {
     recipients = await User.find({ role: "ORGANIZER", status: "ACTIVE" });
+  } else if (recipientType === "ALL_ADMINS") {
+    recipients = await User.find({ role: "ADMIN", status: "ACTIVE" });
+  } else if (recipientType === "ALL_ADMINS_AND_ORGANIZERS") {
+    recipients = await User.find({ role: { $in: ["ADMIN", "ORGANIZER"] }, status: "ACTIVE" });
   } else if (recipientType === "SELECTED_USERS" && selectedUserIds) {
     recipients = await User.find({ _id: { $in: selectedUserIds } });
   }

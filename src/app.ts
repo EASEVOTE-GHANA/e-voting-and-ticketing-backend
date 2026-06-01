@@ -19,6 +19,7 @@ import payoutRoutes from "./routes/payout.routes";
 import cmsRoutes from "./routes/cms.routes";
 import notificationRoutes from "./routes/notification.routes";
 import reconciliationRoutes from "./routes/reconciliation.routes";
+import inquiryRoutes from "./routes/inquiry.routes";
 import { globalErrorHandler } from "./middleware/error.middleware";
 import { CronService } from "./services/cron.service";
 
@@ -70,6 +71,7 @@ app.use("/api/payouts", payoutRoutes);
 app.use("/api/cms", cmsRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/reconciliation", reconciliationRoutes);
+app.use("/api/inquiries", inquiryRoutes);
 
 // Start cron jobs
 CronService.start();
