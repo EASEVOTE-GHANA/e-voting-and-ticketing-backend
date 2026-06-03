@@ -39,11 +39,16 @@ export class ReportService {
     const headers = {
       "createdAt": "Date",
       "paymentReference": "Reference",
-      "userId.fullName": "Customer",
-      "userId.email": "Email",
       "eventId.title": "Event",
+      "customerName": "Customer Name",
+      "customerEmail": "Customer Email",
+      "customerPhone": "Customer Phone",
+      "userId.fullName": "User FullName (If Registered)",
       "type": "Type",
-      "amount": "Amount (GHS)",
+      "paymentGateway": "Gateway",
+      "source": "Channel (Web/USSD)",
+      "currency": "Currency",
+      "amount": "Amount",
       "status": "Status"
     };
 
@@ -58,13 +63,16 @@ export class ReportService {
 
     const headers = {
       "createdAt": "Date",
+      "reference": "Reference",
       "organizerId.businessName": "Organizer",
       "organizerId.email": "Email",
       "amount": "Amount (GHS)",
       "status": "Status",
-      "bankDetails.bankName": "Bank",
-      "bankDetails.accountNumber": "Account",
-      "bankDetails.accountName": "Name"
+      "paymentDetails.method": "Payout Method",
+      "paymentDetails.bankOrNetwork": "Bank / Network",
+      "paymentDetails.accountNumber": "Account Number",
+      "paymentDetails.accountName": "Account Name",
+      "adminNotes": "Admin Notes"
     };
 
     return this.toCsv(payouts, headers);
