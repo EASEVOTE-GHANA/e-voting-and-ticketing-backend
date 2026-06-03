@@ -9,7 +9,7 @@ export interface IPurchase extends Document {
   
   // Payment details
   paymentReference: string;
-  paymentGateway: "PAYSTACK";
+  paymentGateway: "PAYSTACK" | "NALO" | "APPSMOBILE" | "MOOLRE";
   amount: number;
   currency: string;
   
@@ -44,7 +44,7 @@ const purchaseSchema = new Schema<IPurchase>({
   source: { type: String, enum: ["web", "ussd"], default: "web" },
   
   paymentReference: { type: String, required: true, unique: true },
-  paymentGateway: { type: String, enum: ["PAYSTACK"], default: "PAYSTACK" },
+  paymentGateway: { type: String, enum: ["PAYSTACK", "NALO", "APPSMOBILE", "MOOLRE"], default: "PAYSTACK" },
   amount: { type: Number, required: true },
   currency: { type: String, default: "GHS" },
   

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { authenticate } from "../middleware/auth.middleware";
 import { requireRole } from "../middleware/role.middleware";
-import { inviteAdmin, acceptInvitation, approveOrganizer, getRevenueStats, getAllTransactions, getGateways, setPrimaryGateway, resetGatewayHealth, getPlatformStats, getUsersStats, getSystemLogs, exportTransactions, exportPayouts, exportOrganizers, exportEvents, exportNominations } from "../controllers/admin.controller";
+import { inviteAdmin, acceptInvitation, approveOrganizer, getRevenueStats, getAllTransactions, getGateways, setPrimaryGateway, resetGatewayHealth, getPlatformStats, getUsersStats, getSystemLogs, exportTransactions, exportPayouts, exportOrganizers, exportEvents, exportNominations, exportPlatformPdf } from "../controllers/admin.controller";
 import { updateSetting, getSetting, getAllSettings } from "../controllers/settings.controller";
 import { sendManualNotification, getNotificationLogs } from "../controllers/notification.controller";
 
@@ -88,6 +88,13 @@ router.get(
   authenticate,
   requireRole(["ADMIN", "SUPER_ADMIN"]),
   exportNominations
+);
+
+router.get(
+  "/reports/export/pdf",
+  authenticate,
+  requireRole(["ADMIN", "SUPER_ADMIN"]),
+  exportPlatformPdf
 );
 
 router.get(

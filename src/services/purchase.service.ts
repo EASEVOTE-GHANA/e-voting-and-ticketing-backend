@@ -114,6 +114,9 @@ export class PurchaseService {
 
     const resolvedEmail = data.customerEmail || (data.customerPhone ? `${data.customerPhone}@web.easevote.com` : "voter@easevote.com");
 
+    const gateway = await this.getDefaultGateway();
+    const gatewayService = this.getGatewayService(gateway);
+
     const purchase = await Purchase.create({
       eventId: data.eventId,
       userId: data.userId,
@@ -126,11 +129,9 @@ export class PurchaseService {
       expiresAt,
       customerEmail: resolvedEmail,
       customerName: data.customerName,
-      customerPhone: data.customerPhone
+      customerPhone: data.customerPhone,
+      paymentGateway: gateway.toUpperCase()
     });
-
-    const gateway = await this.getDefaultGateway();
-    const gatewayService = this.getGatewayService(gateway);
     
     console.log(`[PurchaseService] Initializing ticket purchase for ${resolvedEmail}. Event: ${data.eventId}, Amount: ${amount}, Reference: ${reference}, Gateway: ${gateway}`);
     
@@ -206,6 +207,9 @@ export class PurchaseService {
 
     const resolvedEmail = data.customerEmail || (data.customerPhone ? `${data.customerPhone}@web.easevote.com` : "voter@easevote.com");
 
+    const gateway = await this.getDefaultGateway();
+    const gatewayService = this.getGatewayService(gateway);
+
     const purchase = await Purchase.create({
       eventId: data.eventId,
       userId: data.userId,
@@ -219,11 +223,9 @@ export class PurchaseService {
       expiresAt,
       customerEmail: resolvedEmail,
       customerName: data.customerName,
-      customerPhone: data.customerPhone
+      customerPhone: data.customerPhone,
+      paymentGateway: gateway.toUpperCase()
     });
-
-    const gateway = await this.getDefaultGateway();
-    const gatewayService = this.getGatewayService(gateway);
     
     console.log(`[PurchaseService] Initializing vote purchase for ${resolvedEmail}. Event: ${data.eventId}, Amount: ${amount}, Reference: ${reference}, Gateway: ${gateway}`);
     
@@ -746,6 +748,9 @@ export class PurchaseService {
     const reference = this.generateReference();
     const expiresAt = new Date(Date.now() + 30.5 * 60 * 1000);
 
+    const gateway = await this.getUSSDPaymentGateway();
+    const gatewayService = this.getGatewayService(gateway);
+
     const purchase = await Purchase.create({
       eventId: data.eventId,
       type: "TICKET",
@@ -756,11 +761,9 @@ export class PurchaseService {
       ticketQuantity: data.quantity,
       expiresAt,
       customerEmail: `${data.customerPhone}@ussd.easevote.com`,
-      customerPhone: data.customerPhone
+      customerPhone: data.customerPhone,
+      paymentGateway: gateway.toUpperCase()
     });
-
-    const gateway = await this.getUSSDPaymentGateway();
-    const gatewayService = this.getGatewayService(gateway);
 
     if (!gatewayService.initializeUSSDPayment) {
       throw new AppError("Selected gateway does not support USSD payments", 400);
@@ -829,6 +832,9 @@ export class PurchaseService {
     const reference = this.generateReference();
     const expiresAt = new Date(Date.now() + 30.5 * 60 * 1000);
 
+    const gateway = await this.getUSSDPaymentGateway();
+    const gatewayService = this.getGatewayService(gateway);
+
     const purchase = await Purchase.create({
       eventId: data.eventId,
       type: "VOTE",
@@ -840,11 +846,9 @@ export class PurchaseService {
       voteCount: data.voteCount,
       expiresAt,
       customerEmail: `${data.customerPhone}@ussd.easevote.com`,
-      customerPhone: data.customerPhone
+      customerPhone: data.customerPhone,
+      paymentGateway: gateway.toUpperCase()
     });
-
-    const gateway = await this.getUSSDPaymentGateway();
-    const gatewayService = this.getGatewayService(gateway);
 
     if (!gatewayService.initializeUSSDPayment) {
       throw new AppError("Selected gateway does not support USSD payments", 400);
@@ -900,6 +904,8 @@ export class PurchaseService {
     }
     
     if (query.type && query.type !== "ALL") filter.type = query.type;
+    if (query.gateway && query.gateway !== "ALL") filter.paymentGateway = query.gateway;
+    if (query.channel && query.channel !== "ALL") filter.source = query.channel.toLowerCase();
 
     // Sort by createdAt desc by default
     const sort = { createdAt: -1 };
@@ -946,6 +952,10 @@ export class PurchaseService {
         filter.status = query.status;
       }
     }
+
+    if (query.type && query.type !== "ALL") filter.type = query.type;
+    if (query.gateway && query.gateway !== "ALL") filter.paymentGateway = query.gateway;
+    if (query.channel && query.channel !== "ALL") filter.source = query.channel.toLowerCase();
 
     const [purchases, total] = await Promise.all([
       Purchase.find(filter)
