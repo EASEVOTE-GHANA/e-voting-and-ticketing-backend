@@ -99,3 +99,7 @@ export const exportNominations = asyncHandler(async (req: Request, res: Response
   res.setHeader("Content-Disposition", `attachment; filename=nominations_${Date.now()}.csv`);
   res.send(csv);
 });
+
+export const exportPlatformPdf = asyncHandler(async (req: Request, res: Response) => {
+  await ReportService.generatePlatformPdf(res);
+});
