@@ -165,6 +165,13 @@ export class UserService {
     user.status = "DISABLED";
     await user.save();
     
+    try {
+      const { EmailService } = await import("./email.service");
+      await EmailService.sendAccountDeletedEmail(user.email, user.fullName);
+    } catch (err) {
+      console.error("[UserService] Failed to send account deletion email:", err);
+    }
+    
     return { message: "User soft-deleted successfully" };
   }
 
@@ -190,8 +197,20 @@ export class UserService {
 
     user.isDeleted = false;
     user.deletedAt = undefined;
-    user.status = "ACTIVE";
+    
+    if (user.passwordHash === "INVITED_PENDING_PASSWORD" || (!user.emailVerified && user.role === "ORGANIZER")) {
+      user.status = "PENDING";
+    } else {
+      user.status = "ACTIVE";
+    }
     await user.save();
+
+    try {
+      const { EmailService } = await import("./email.service");
+      await EmailService.sendAccountRestoredEmail(user.email, user.fullName);
+    } catch (err) {
+      console.error("[UserService] Failed to send account restoration email:", err);
+    }
 
     return { message: "User restored successfully" };
   }
@@ -213,5 +232,33 @@ export class UserService {
     await User.findByIdAndDelete(id);
 
     return { message: "User permanently deleted" };
+  }
+
+  static async resendVerificationEmail(id: string, currentUserRole: string) {
+    const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(currentUserRole);
+    if (!isAdmin) {
+      throw new AppError("Unauthorized", 403);
+    }
+
+    const user = await User.findById(id);
+    if (!user) {
+      throw new AppError("User not found", 404);
+    }
+
+    if (user.isDeleted) {
+      throw new AppError("Cannot resend verification for deleted user", 400);
+    }
+
+    if (user.emailVerified) {
+      throw new AppError("Email is already verified", 400);
+    }
+
+    const { TokenService } = await import("./token.service");
+    const { EmailService } = await import("./email.service");
+
+    const verificationToken = await TokenService.createEmailVerificationToken(user._id.toString());
+    await EmailService.sendVerificationEmail(user.email, verificationToken);
+
+    return { message: "Verification email resent successfully" };
   }
 }
