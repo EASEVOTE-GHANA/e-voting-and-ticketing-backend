@@ -74,16 +74,20 @@ export class EmailService {
       }
 
       // Success check based on Nalo response structure
-      const success = response.data.status === true || response.status === 200;
+      // Nalo might return HTTP 200 but have status: false in the JSON body.
+      const isApiSuccess = response.data && response.data.status === true;
+      const success = isApiSuccess || (response.status === 200 && response.data && !("status" in response.data));
+      
       if (!success) {
         console.error(`[EmailService] Nalo error for ${options.to}:`, response.data);
+        throw new Error(response.data?.message || "Failed to send email via Nalo API");
       } else {
         console.log(`[EmailService] Email sent to ${options.to}. Job ID: ${response.data.email_job_id}`);
       }
 
       return {
-        data: success ? { id: response.data.email_job_id } : null,
-        error: success ? null : { message: response.data.message || "Nalo API failed", code: response.status }
+        data: { id: response.data.email_job_id },
+        error: null
       };
     } catch (error: any) {
       console.error(`[EmailService] Unexpected failure sending email to ${options.to}:`, error.response?.data || error.message);
@@ -129,6 +133,34 @@ export class EmailService {
     await this.sendNaloEmail({
       to: email,
       subject: "You've been invited as an Admin",
+      html
+    });
+  }
+
+  static async sendAccountDeletedEmail(email: string, userName: string) {
+    const html = TemplateHelper.render("account-deleted", {
+      userName,
+      year: CURRENT_YEAR
+    });
+
+    await this.sendNaloEmail({
+      to: email,
+      subject: "Your Account has been Deactivated",
+      html
+    });
+  }
+
+  static async sendAccountRestoredEmail(email: string, userName: string) {
+    const loginUrl = `${process.env.FRONTEND_URL}/login`;
+    const html = TemplateHelper.render("account-restored", {
+      userName,
+      loginUrl,
+      year: CURRENT_YEAR
+    });
+
+    await this.sendNaloEmail({
+      to: email,
+      subject: "Your Account has been Restored",
       html
     });
   }

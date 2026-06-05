@@ -8,7 +8,8 @@ import {
   updatePassword,
   deleteUser,
   restoreUser,
-  permanentDeleteUser
+  permanentDeleteUser,
+  resendVerificationEmail
 } from "../controllers/user.controller";
 
 const router = Router();
@@ -20,5 +21,6 @@ router.patch("/:id/password", authenticate, updatePassword);
 router.delete("/:id", authenticate, requireRole(["ADMIN", "SUPER_ADMIN"], { allowPending: true }), deleteUser);
 router.patch("/:id/restore", authenticate, requireRole(["ADMIN", "SUPER_ADMIN"]), restoreUser);
 router.delete("/:id/permanent", authenticate, requireRole(["SUPER_ADMIN"]), permanentDeleteUser);
+router.post("/:id/resend-verification", authenticate, requireRole(["ADMIN", "SUPER_ADMIN"]), resendVerificationEmail);
 
 export default router;

@@ -9,23 +9,40 @@ export class AdminService {
   static async inviteAdmin(adminData: {
     fullName: string;
     email: string;
+    phone?: string;
   }) {
-    const { fullName, email } = adminData;
+    const { fullName, email, phone } = adminData;
 
-    const exists = await User.findOne({ email });
-    if (exists) {
-      throw new AppError("Email already exists", 409);
+    let user = await User.findOne({ email });
+    if (user) {
+      if (user.isDeleted) {
+        user.isDeleted = false;
+        user.deletedAt = undefined;
+        user.status = "PENDING";
+        user.fullName = fullName;
+        user.role = "ADMIN";
+        if (phone) user.phone = phone;
+        user.passwordHash = "INVITED_PENDING_PASSWORD";
+        await user.save();
+      } else if (user.status === "PENDING") {
+        // Just resend the invitation, optionally update details
+        user.fullName = fullName;
+        if (phone) user.phone = phone;
+        await user.save();
+      } else {
+        throw new AppError("Email already exists", 409);
+      }
+    } else {
+      user = await User.create({
+        fullName,
+        email,
+        phone,
+        passwordHash: "INVITED_PENDING_PASSWORD", // Placeholder
+        role: "ADMIN",
+        status: "PENDING",
+        emailVerified: true
+      });
     }
-
-    // Create user with PENDING status and placeholder password
-    const user = await User.create({
-      fullName,
-      email,
-      passwordHash: "INVITED_PENDING_PASSWORD", // Placeholder
-      role: "ADMIN",
-      status: "PENDING",
-      emailVerified: true
-    });
 
     const token = await TokenService.createAdminInvitationToken(user._id.toString());
     await EmailService.sendAdminInvitationEmail(email, token);
