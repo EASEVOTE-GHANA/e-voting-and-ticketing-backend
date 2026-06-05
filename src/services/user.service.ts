@@ -99,7 +99,7 @@ export class UserService {
     if (currentUserRole === "ORGANIZER" && id !== currentUserId) {
       throw new AppError("Unauthorized", 403);
     }
-    if (currentUserRole === "ADMIN" && user.role !== "ORGANIZER") {
+    if (currentUserRole === "ADMIN" && id !== currentUserId && user.role !== "ORGANIZER") {
       throw new AppError("Unauthorized", 403);
     }
 
