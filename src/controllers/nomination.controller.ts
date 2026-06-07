@@ -4,13 +4,13 @@ import { asyncHandler } from "../middleware/error.middleware";
 
 export const createNominationForm = asyncHandler(async (req: Request, res: Response) => {
   const eventId = Array.isArray(req.params.eventId) ? req.params.eventId[0] : req.params.eventId;
-  const form = await NominationService.createForm(eventId, req.body.customFields, req.user!.id);
+  const form = await NominationService.createForm(eventId, req.body.customFields, req.user!);
   res.status(201).json(form);
 });
 
 export const getNominationForm = asyncHandler(async (req: Request, res: Response) => {
   const eventId = Array.isArray(req.params.eventId) ? req.params.eventId[0] : req.params.eventId;
-  const form = await NominationService.getForm(eventId, req.user?.id);
+  const form = await NominationService.getForm(eventId, req.user);
   res.json(form);
 });
 
@@ -22,7 +22,7 @@ export const submitNomination = asyncHandler(async (req: Request, res: Response)
 
 export const getNominations = asyncHandler(async (req: Request, res: Response) => {
   const eventId = Array.isArray(req.params.eventId) ? req.params.eventId[0] : req.params.eventId;
-  const nominations = await NominationService.getNominations(eventId, req.user!.id, req.query);
+  const nominations = await NominationService.getNominations(eventId, req.user!, req.query);
   res.json(nominations);
 });
 
@@ -33,12 +33,12 @@ export const getAllOrganizerNominations = asyncHandler(async (req: Request, res:
 
 export const approveNomination = asyncHandler(async (req: Request, res: Response) => {
   const nominationId = Array.isArray(req.params.nominationId) ? req.params.nominationId[0] : req.params.nominationId;
-  const result = await NominationService.approveNomination(nominationId, req.user!.id);
+  const result = await NominationService.approveNomination(nominationId, req.user!);
   res.json(result);
 });
 
 export const rejectNomination = asyncHandler(async (req: Request, res: Response) => {
   const nominationId = Array.isArray(req.params.nominationId) ? req.params.nominationId[0] : req.params.nominationId;
-  const result = await NominationService.rejectNomination(nominationId, req.user!.id);
+  const result = await NominationService.rejectNomination(nominationId, req.user!);
   res.json(result);
 });
