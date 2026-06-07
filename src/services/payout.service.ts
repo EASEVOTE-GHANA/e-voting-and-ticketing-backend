@@ -7,6 +7,8 @@ import { AppError } from "../middleware/error.middleware";
 import { PaginationHelper } from "../utils/pagination.util";
 import { ReconciliationService } from "./reconciliation.service";
 import { AnalyticsService } from "./analytics.service";
+import { NotificationService } from "./notification.service";
+import { SMSService } from "./sms.service";
 
 export interface IPayoutBalance {
   grossRevenue: number;
@@ -185,22 +187,40 @@ export class PayoutService {
    * Admin: Update payout status manually.
    */
   static async updatePayoutStatus(payoutId: string, status: PayoutStatus, notes: string, adminId: string) {
-    const payout = await Payout.findById(payoutId);
+    const payout = await Payout.findById(payoutId).populate("organizerId");
     if (!payout) {
       throw new AppError("Payout request not found", 404);
     }
 
-    // Business logic: Can't update PAID or REJECTED payouts
-    if (["PAID", "REJECTED", "CANCELLED"].includes(payout.status)) {
-      throw new AppError(`Cannot update a payout that is already ${payout.status}`, 400);
-    }
+    // Removed restriction to allow superadmins to correct mistakes
 
+    const previousStatus = payout.status;
     payout.status = status;
     payout.adminNotes = notes;
     payout.processedBy = new mongoose.Types.ObjectId(adminId);
     payout.processedAt = new Date();
 
     await payout.save();
+
+    // Send notifications if status changed
+    if (previousStatus !== status && payout.organizerId) {
+      const organizer = payout.organizerId as any;
+      
+      // In-app Notification
+      await NotificationService.create({
+        userId: organizer._id,
+        title: "Payout Status Updated",
+        message: `Your payout request for GHS ${payout.amount.toFixed(2)} is now ${status}.${notes ? ' Notes: ' + notes : ''}`,
+        type: "PAYOUT"
+      });
+
+      // SMS Notification
+      if (organizer.phone) {
+        const smsMessage = `EaseVote: Your payout request of GHS ${payout.amount.toFixed(2)} is now ${status}.`;
+        await SMSService.sendCustomMessage(organizer.phone, smsMessage).catch(err => console.error("SMS Error:", err));
+      }
+    }
+
     return payout;
   }
 }
