@@ -9,13 +9,13 @@ import { NotificationService } from "./notification.service";
 import { PaginationHelper } from "../utils/pagination.util";
 
 export class NominationService {
-  static async createForm(eventId: string, customFields: any[], organizerId: string) {
+  static async createForm(eventId: string, customFields: any[], user: any) {
     const event = await Event.findById(eventId);
     if (!event) {
       throw new AppError("Event not found", 404);
     }
 
-    if (event.organizerId.toString() !== organizerId) {
+    if (event.organizerId.toString() !== user.id && user.role !== "ADMIN" && user.role !== "SUPER_ADMIN") {
       throw new AppError("Unauthorized", 403);
     }
 
@@ -36,13 +36,13 @@ export class NominationService {
     return form;
   }
 
-  static async getForm(eventId: string, userId?: string) {
+  static async getForm(eventId: string, user?: any) {
     const event = await Event.findById(eventId);
     if (!event) {
       throw new AppError("Event not found", 404);
     }
 
-    const isOrganizer = userId && event.organizerId.toString() === userId;
+    const isOrganizer = user && (event.organizerId.toString() === user.id || user.role === "ADMIN" || user.role === "SUPER_ADMIN");
 
     // 1. Check if public nominations are enabled for non-organizers
     if (!isOrganizer) {
@@ -175,13 +175,13 @@ export class NominationService {
     return nomination;
   }
 
-  static async getNominations(eventId: string, organizerId: string, query?: any) {
+  static async getNominations(eventId: string, user: any, query?: any) {
     const event = await Event.findById(eventId);
     if (!event) {
       throw new AppError("Event not found", 404);
     }
 
-    if (event.organizerId.toString() !== organizerId) {
+    if (event.organizerId.toString() !== user.id && user.role !== "ADMIN" && user.role !== "SUPER_ADMIN") {
       throw new AppError("Unauthorized", 403);
     }
 
@@ -230,7 +230,7 @@ export class NominationService {
     });
   }
 
-  static async approveNomination(nominationId: string, organizerId: string) {
+  static async approveNomination(nominationId: string, user: any) {
     const nomination = await Nomination.findById(nominationId);
     if (!nomination) {
       throw new AppError("Nomination not found", 404);
@@ -241,7 +241,7 @@ export class NominationService {
       throw new AppError("Event not found", 404);
     }
 
-    if (event.organizerId.toString() !== organizerId) {
+    if (event.organizerId.toString() !== user.id && user.role !== "ADMIN" && user.role !== "SUPER_ADMIN") {
       throw new AppError("Unauthorized", 403);
     }
 
@@ -309,7 +309,7 @@ export class NominationService {
     return { message: "Nomination approved and candidate created", nomination };
   }
 
-  static async rejectNomination(nominationId: string, organizerId: string) {
+  static async rejectNomination(nominationId: string, user: any) {
     const nomination = await Nomination.findById(nominationId);
     if (!nomination) {
       throw new AppError("Nomination not found", 404);
@@ -320,7 +320,7 @@ export class NominationService {
       throw new AppError("Event not found", 404);
     }
 
-    if (event.organizerId.toString() !== organizerId) {
+    if (event.organizerId.toString() !== user.id && user.role !== "ADMIN" && user.role !== "SUPER_ADMIN") {
       throw new AppError("Unauthorized", 403);
     }
 
