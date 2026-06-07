@@ -112,7 +112,7 @@ export class PurchaseService {
     // Hold tickets for 30.5 minutes (Paystack URL expires in 30 minutes)
     const expiresAt = new Date(Date.now() + 30.5 * 60 * 1000);
 
-    const resolvedEmail = data.customerEmail || (data.customerPhone ? `${data.customerPhone}@web.easevote.com` : "voter@easevote.com");
+    const resolvedEmail = data.customerEmail || `${event.eventCode}@easevote.com`;
 
     const gateway = await this.getDefaultGateway();
     const gatewayService = this.getGatewayService(gateway);
@@ -205,7 +205,7 @@ export class PurchaseService {
     // Hold votes for 30.5 minutes
     const expiresAt = new Date(Date.now() + 30.5 * 60 * 1000);
 
-    const resolvedEmail = data.customerEmail || (data.customerPhone ? `${data.customerPhone}@web.easevote.com` : "voter@easevote.com");
+    const resolvedEmail = data.customerEmail || `${event.eventCode}@easevote.com`;
 
     const gateway = await this.getDefaultGateway();
     const gatewayService = this.getGatewayService(gateway);
@@ -770,7 +770,7 @@ export class PurchaseService {
       ticketTypeId: data.ticketTypeId,
       ticketQuantity: data.quantity,
       expiresAt,
-      customerEmail: `${data.customerPhone}@ussd.easevote.com`,
+      customerEmail: `${event.eventCode}@easevote.com`,
       customerPhone: data.customerPhone,
       paymentGateway: gateway.toUpperCase()
     });
@@ -782,7 +782,7 @@ export class PurchaseService {
     console.log(`[PurchaseService] Initializing ticket purchase (USSD) for ${data.customerPhone}. Event: ${data.eventId}, Amount: ${amount}, Reference: ${reference}, Gateway: ${gateway}`);
     
     const paymentData = await gatewayService.initializeUSSDPayment({
-      email: `${data.customerPhone}@ussd.easevote.com`,
+      email: `${event.eventCode}@easevote.com`,
       amount,
       reference,
       network: data.network,
@@ -855,7 +855,7 @@ export class PurchaseService {
       categoryId: data.categoryId,
       voteCount: data.voteCount,
       expiresAt,
-      customerEmail: `${data.customerPhone}@ussd.easevote.com`,
+      customerEmail: `${event.eventCode}@easevote.com`,
       customerPhone: data.customerPhone,
       paymentGateway: gateway.toUpperCase()
     });
@@ -867,7 +867,7 @@ export class PurchaseService {
     console.log(`[PurchaseService] Initializing vote purchase (USSD) for ${data.customerPhone}. Event: ${data.eventId}, Amount: ${amount}, Reference: ${reference}, Gateway: ${gateway}`);
     
     const paymentData = await gatewayService.initializeUSSDPayment({
-      email: `${data.customerPhone}@ussd.easevote.com`,
+      email: `${event.eventCode}@easevote.com`,
       amount,
       reference,
       network: data.network,

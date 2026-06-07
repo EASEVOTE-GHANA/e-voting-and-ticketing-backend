@@ -37,7 +37,9 @@ export class AppsMobileService implements IPaymentGateway {
         nickname: "EaseVote",
         landing_page: `${process.env.FRONTEND_URL}/payment/success`,
         ts: new Date().toISOString().replace('T', ' ').substring(0, 19),
-        payment_mode: "CRM"
+        payment_mode: "CRM",
+        customer_number: data.metadata?.customerPhone || undefined,
+        customer_email: data.email || (data.metadata?.eventCode ? `${data.metadata.eventCode}@easevote.com` : "info@easevotegh.com")
       };
 
       const payloadString = JSON.stringify(payload);

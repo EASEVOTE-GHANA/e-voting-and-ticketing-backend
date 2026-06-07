@@ -13,7 +13,7 @@ export class FaqService {
   static async upsertFaq(data: any) {
     const { id, ...updateData } = data;
     if (id) {
-      const faq = await Faq.findByIdAndUpdate(id, updateData, { new: true });
+      const faq = await Faq.findByIdAndUpdate(id, updateData, { returnDocument: 'after' });
       if (!faq) throw new AppError("FAQ not found", 404);
       return faq;
     }

@@ -23,9 +23,7 @@ export class NominationService {
       throw new AppError("Only voting events support nominations", 400);
     }
 
-    if (!event.allowPublicNominations) {
-      throw new AppError("Public nominations not enabled for this event", 400);
-    }
+    // Organizers can configure the form regardless of whether public nominations are currently enabled or not
 
     const existingForm = await NominationForm.findOne({ eventId });
     if (existingForm) {
