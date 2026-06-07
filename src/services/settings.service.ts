@@ -29,7 +29,7 @@ export class SettingsService {
     const setting = await Settings.findOneAndUpdate(
       { key },
       { value, updatedBy },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
 
     return setting;

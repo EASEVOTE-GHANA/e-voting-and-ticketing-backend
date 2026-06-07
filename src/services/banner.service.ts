@@ -15,7 +15,7 @@ export class BannerService {
   }
 
   static async updateBanner(id: string, data: any) {
-    const banner = await Banner.findByIdAndUpdate(id, data, { new: true });
+    const banner = await Banner.findByIdAndUpdate(id, data, { returnDocument: 'after' });
     if (!banner) throw new AppError("Banner not found", 404);
     return banner;
   }

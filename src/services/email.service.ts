@@ -19,6 +19,12 @@ export class EmailService {
       const fromEmail = process.env.FROM_EMAIL_PURE || "noreply@easevotegh.com";
       const senderName = process.env.SENDER_NAME || "EaseVote Ghana";
       
+      // Prevent sending to placeholder/internal emails to save costs
+      if (options.to.toLowerCase().endsWith('@easevote.com') || options.to.toLowerCase().endsWith('@easevotegh.com')) {
+        console.log(`[EmailService] Skipping placeholder email address to save costs: ${options.to}`);
+        return { data: { id: "skipped_placeholder" }, error: null };
+      }
+      
       console.log(`[EmailService] Preparing to send email to ${options.to} via Nalo API from ${fromEmail}...`);
       
       let response;

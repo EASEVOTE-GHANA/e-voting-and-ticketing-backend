@@ -31,7 +31,7 @@ export class BlogService {
         data.slug = slugify(data.title);
     }
     
-    const blog = await Blog.findByIdAndUpdate(id, data, { new: true });
+    const blog = await Blog.findByIdAndUpdate(id, data, { returnDocument: 'after' });
     if (!blog) throw new AppError("Blog post not found", 404);
     return blog;
   }

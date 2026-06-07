@@ -222,9 +222,15 @@ export class EventService {
       throw new AppError("Unauthorized", 403);
     }
 
-    // Prevent certain updates based on status
+    // Prevent certain updates based on status (whitelist nomination settings)
     if (event.status === "LIVE" && updateData.status !== "PAUSED") {
-      throw new AppError("Cannot modify live event", 400);
+      const isOnlyUpdatingNominations = Object.keys(updateData).every(key => 
+        ['allowPublicNominations', 'nominationStartDate', 'nominationEndDate'].includes(key)
+      );
+      
+      if (!isOnlyUpdatingNominations) {
+        throw new AppError("Cannot modify live event (except for nomination settings)", 400);
+      }
     }
 
     // Explicitly reject type modification
@@ -762,7 +768,7 @@ export class EventService {
     return await Event.findByIdAndUpdate(
       eventId, 
       { status: "PAUSED" }, 
-      { new: true, runValidators: false } // Bypasses full validation for emergency status changes
+      { returnDocument: 'after', runValidators: false } // Bypasses full validation for emergency status changes
     );
   }
 
@@ -788,7 +794,7 @@ export class EventService {
     return await Event.findByIdAndUpdate(
       eventId, 
       { status: targetStatus }, 
-      { new: true, runValidators: false }
+      { returnDocument: 'after', runValidators: false }
     );
   }
 

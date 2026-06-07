@@ -66,7 +66,7 @@ export class NotificationService {
     return await Notification.findOneAndUpdate(
       { _id: notificationId, userId } as any,
       { read: true } as any,
-      { new: true }
+      { returnDocument: 'after' }
     );
   }
 
