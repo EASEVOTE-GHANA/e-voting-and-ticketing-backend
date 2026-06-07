@@ -67,9 +67,16 @@ export class PaystackService implements IPaymentGateway {
         }
       );
 
+      const data = response.data.data;
       return {
-        ...response.data.data,
-        metadata: response.data.data.metadata
+        success: data.status === 'success',
+        status: data.status,
+        amount: data.amount / 100, // convert back to GHS
+        currency: data.currency,
+        reference: data.reference,
+        customerPhone: data.customer?.phone,
+        metadata: data.metadata,
+        gatewayData: data
       };
     } catch (error: any) {
       console.error("Paystack verification error:", error.response?.data);
@@ -94,6 +101,7 @@ export class PaystackService implements IPaymentGateway {
         reference: event.data.reference,
         status: 'success',
         amount: (event.data.amount) / 100, // Convert from subunits (pesewas/kobo)
+        customerPhone: event.data.customer?.phone,
         metadata: event.data.metadata
       };
     }
@@ -104,6 +112,7 @@ export class PaystackService implements IPaymentGateway {
         reference: event.data.reference,
         status: 'failed',
         amount: (event.data.amount) / 100,
+        customerPhone: event.data.customer?.phone,
         metadata: event.data.metadata
       };
     }

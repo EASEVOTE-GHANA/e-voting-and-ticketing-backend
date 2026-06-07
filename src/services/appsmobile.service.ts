@@ -99,6 +99,7 @@ export class AppsMobileService implements IPaymentGateway {
         amount: 0, // Amount not returned in verification
         currency: "GHS",
         reference: data.trans_ref,
+        customerPhone: data.customer_number || data.client_number || undefined,
       };
     } catch (error: any) {
       console.error("Apps&Mobile verification error:", error.response?.data);
@@ -117,7 +118,8 @@ export class AppsMobileService implements IPaymentGateway {
         isValid: true,
         reference: data.trans_ref,
         status: isSuccess ? "success" : "failed",
-        amount: parseFloat(data.trans_amount || data.amount || "0")
+        amount: parseFloat(data.trans_amount || data.amount || "0"),
+        customerPhone: data.customer_number || data.client_number || undefined,
       };
     }
 
