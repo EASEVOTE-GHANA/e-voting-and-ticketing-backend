@@ -21,6 +21,19 @@ export const globalErrorHandler = (
   err.statusCode = err.statusCode || 500;
   err.message = err.message || "Internal Server Error";
 
+  if (err.name === "ValidationError") {
+    err.statusCode = 400;
+    const errors = Object.values(err.errors || {}).map((el: any) => el.message);
+    err.message = errors.length > 0 ? `Validation failed: ${errors.join(', ')}` : err.message;
+  } else if (err.code === 11000) {
+    err.statusCode = 400;
+    const field = Object.keys(err.keyValue || {})[0];
+    err.message = field ? `Duplicate field value entered for ${field}. Please use another value.` : "Duplicate field value entered.";
+  } else if (err.name === "CastError") {
+    err.statusCode = 400;
+    err.message = `Invalid ${err.path}: ${err.value}.`;
+  }
+
   console.error(`[GlobalErrorHandler] Error ${err.statusCode}: ${err.message}`, {
     path: req.path,
     method: req.method,
