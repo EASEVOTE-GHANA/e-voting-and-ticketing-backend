@@ -62,7 +62,7 @@ router.delete("/:eventId/categories/:categoryId", authenticate, requireRole(["OR
 router.post("/:eventId/categories/:categoryId/candidates", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), addCandidate);
 router.put("/:eventId/categories/:categoryId/candidates/:candidateId", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), updateCandidate);
 router.delete("/:eventId/categories/:categoryId/candidates/:candidateId", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), deleteCandidate);
-router.post("/:id/ticket-types", authenticate, requireRole("ORGANIZER", { allowPending: true }), addTicketType);
+router.post("/:id/ticket-types", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), addTicketType);
 router.put("/:eventId/ticket-types/:ticketTypeId", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), updateTicketType);
 router.delete("/:eventId/ticket-types/:ticketTypeId", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), deleteTicketType);
 router.delete("/:id", authenticate, deleteEvent);
