@@ -33,6 +33,7 @@ export interface PaymentVerificationResult {
   amount: number;
   currency: string;
   reference: string;
+  customerPhone?: string;
   metadata?: any;
   gatewayData?: any;
 }
@@ -42,6 +43,7 @@ export interface WebhookResult {
   reference?: string;
   status?: string;
   amount?: number;
+  customerPhone?: string;
   metadata?: any;
 }
 

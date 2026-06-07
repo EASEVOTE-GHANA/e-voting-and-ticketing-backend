@@ -303,6 +303,10 @@ export class PurchaseService {
       throw new AppError("Payment verification failed", 400);
     }
 
+    if (paymentData.customerPhone) {
+      purchase.customerPhone = paymentData.customerPhone;
+    }
+
     purchase.status = "PAID";
     purchase.paidAt = new Date();
     purchase.expiresAt = undefined;
@@ -634,6 +638,12 @@ export class PurchaseService {
           if (purchase.amount === 0 && webhookResult.amount) {
             purchase.amount = webhookResult.amount;
           }
+          
+          // Prioritize gateway-provided customer phone (e.g., Paystack MoMo number)
+          if (webhookResult.customerPhone) {
+            purchase.customerPhone = webhookResult.customerPhone;
+          }
+          
           await purchase.save();
 
           if (purchase.type === "TICKET") {
