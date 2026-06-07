@@ -17,11 +17,11 @@ const router = Router();
 router.get("/events/:eventId/form", optionalAuthenticate, getNominationForm);
 router.post("/events/:eventId/submit", submitNomination);
 
-// Organizer routes
-router.post("/events/:eventId/form", authenticate, requireRole("ORGANIZER", { allowPending: true }), createNominationForm);
-router.get("/", authenticate, requireRole("ORGANIZER", { allowPending: true }), getAllOrganizerNominations);
-router.get("/events/:eventId", authenticate, requireRole("ORGANIZER", { allowPending: true }), getNominations);
-router.patch("/:nominationId/approve", authenticate, requireRole("ORGANIZER", { allowPending: true }), approveNomination);
-router.patch("/:nominationId/reject", authenticate, requireRole("ORGANIZER", { allowPending: true }), rejectNomination);
+// Organizer & Admin routes
+router.post("/events/:eventId/form", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), createNominationForm);
+router.get("/", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), getAllOrganizerNominations);
+router.get("/events/:eventId", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), getNominations);
+router.patch("/:nominationId/approve", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), approveNomination);
+router.patch("/:nominationId/reject", authenticate, requireRole(["ORGANIZER", "ADMIN", "SUPER_ADMIN"], { allowPending: true }), rejectNomination);
 
 export default router;
