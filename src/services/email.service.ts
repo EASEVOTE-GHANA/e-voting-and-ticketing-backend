@@ -1,6 +1,7 @@
 import axios from "axios";
 import FormData from "form-data";
 import { TemplateHelper } from "../utils/template.helper";
+import { AppError } from "../middleware/error.middleware";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -91,7 +92,17 @@ export class EmailService {
       };
     } catch (error: any) {
       console.error(`[EmailService] Unexpected failure sending email to ${options.to}:`, error.response?.data || error.message);
-      throw error;
+      
+      let errMsg = "Failed to send email. The address may be invalid or previously bounced.";
+      if (error.response?.data) {
+        if (typeof error.response.data.emailTo === 'string') {
+          errMsg = error.response.data.emailTo;
+        } else if (error.response.data.message) {
+          errMsg = error.response.data.message;
+        }
+      }
+      
+      throw new AppError(errMsg, 400);
     }
   }
 
