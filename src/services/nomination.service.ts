@@ -199,11 +199,14 @@ export class NominationService {
     return PaginationHelper.formatResponse(nominations, total, page, limit);
   }
 
-  static async getAllOrganizerNominations(organizerId: string, query?: any) {
-    const events = await Event.find({ organizerId });
-    const eventIds = events.map(e => e._id);
+  static async getAllOrganizerNominations(userId: string, userRole: string, query?: any) {
+    let filter: any = {};
 
-    const filter: any = { eventId: { $in: eventIds } };
+    if (userRole !== "ADMIN" && userRole !== "SUPER_ADMIN") {
+        const events = await Event.find({ organizerId: userId });
+        const eventIds = events.map(e => e._id);
+        filter.eventId = { $in: eventIds };
+    }
     if (query?.status && query.status !== 'ALL') filter.status = query.status;
 
     const nominations = await Nomination.find(filter)
@@ -306,6 +309,21 @@ export class NominationService {
       console.error('Failed to send nomination approval notifications:', error);
     }
 
+    // Notify organizer if an admin approved it
+    if (user.id !== event.organizerId.toString()) {
+      try {
+        await NotificationService.create({
+          userId: event.organizerId,
+          title: `Nomination Approved`,
+          message: `Admin has approved the nomination for "${nomination.nomineeName}" in your event "${event.title}".`,
+          type: "EVENT",
+          metadata: { eventId: event._id, nominationId: nomination._id }
+        });
+      } catch (error) {
+        console.error('Failed to notify organizer of admin approval:', error);
+      }
+    }
+
     return { message: "Nomination approved and candidate created", nomination };
   }
 
@@ -347,6 +365,21 @@ export class NominationService {
       }
     } catch (error) {
       console.error('Failed to send nomination rejection email:', error);
+    }
+
+    // Notify organizer if an admin rejected it
+    if (user.id !== event.organizerId.toString()) {
+      try {
+        await NotificationService.create({
+          userId: event.organizerId,
+          title: `Nomination Rejected`,
+          message: `Admin has rejected the nomination for "${nomination.nomineeName}" in your event "${event.title}".`,
+          type: "EVENT",
+          metadata: { eventId: event._id, nominationId: nomination._id }
+        });
+      } catch (error) {
+        console.error('Failed to notify organizer of admin rejection:', error);
+      }
     }
 
     return { message: "Nomination rejected", nomination };

@@ -27,7 +27,7 @@ export const getNominations = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const getAllOrganizerNominations = asyncHandler(async (req: Request, res: Response) => {
-  const nominations = await NominationService.getAllOrganizerNominations(req.user!.id, req.query);
+  const nominations = await NominationService.getAllOrganizerNominations(req.user!.id, req.user!.role, req.query);
   res.json(nominations);
 });
 
