@@ -4,6 +4,7 @@ import helmet from "helmet";
 import mongoose from "mongoose";
 import path from "path";
 import fs from "fs";
+import morgan from "morgan";
 import authRoutes from "./routes/auth.routes";
 import adminRoutes from "./routes/admin.routes";
 import blogRoutes from "./routes/blog.routes";
@@ -28,6 +29,30 @@ const app = express();
 app.use(cors());
 app.use(helmet());
 app.use(express.json());
+
+morgan.token('body', (req: any) => {
+  if (req.body && Object.keys(req.body).length > 0) {
+    const bodyClone = { ...req.body };
+    // Redact sensitive fields
+    if (bodyClone.password) bodyClone.password = '[REDACTED]';
+    if (bodyClone.newPassword) bodyClone.newPassword = '[REDACTED]';
+    return JSON.stringify(bodyClone);
+  }
+  return '{}';
+});
+
+const morganFormat = ':remote-addr - :method :url :status - :response-time ms - body: :body';
+
+// 1. Log to console (stdout) - This is what Fluentd, AWS CloudWatch, or PM2 will capture automatically
+app.use(morgan(morganFormat));
+
+// 2. Log to a physical file - This is what you can persist using Docker Volumes
+const logsDir = path.join(__dirname, "../logs");
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true });
+}
+const accessLogStream = fs.createWriteStream(path.join(logsDir, "access.log"), { flags: "a" });
+app.use(morgan(morganFormat, { stream: accessLogStream }));
 
 // Safely resolve public directory for both dev and prod
 const publicPath = fs.existsSync(path.join(__dirname, "../public/index.html"))
