@@ -12,14 +12,6 @@ services:
       - .env
     volumes:
       - ./logs:/app/logs
-    depends_on:
-      - fluentd
-    logging:
-      driver: "fluentd"
-      options:
-        fluentd-address: localhost:24224
-        tag: easevote.backend
-        fluentd-async-connect: "true"
     restart: unless-stopped
 
   nginx:
@@ -36,13 +28,3 @@ services:
       - easevote-backend
     restart: unless-stopped
 
-  fluentd:
-    image: fluent/fluentd:v1.16-1
-    container_name: easevote-fluentd
-    ports:
-      - "24224:24224"
-      - "24224:24224/udp"
-    volumes:
-      - ./fluentd/conf:/fluentd/etc
-      - ./fluentd/logs:/fluentd/log
-    restart: unless-stopped
