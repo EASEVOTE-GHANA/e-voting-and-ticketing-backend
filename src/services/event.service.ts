@@ -509,15 +509,7 @@ export class EventService {
       throw new AppError("Unauthorized to permanently delete this event", 403);
     }
 
-    // Safety check: Only allow permanent deletion of deleted events or drafts
-    if (!isSuperAdmin && !event.isDeleted && event.status !== "DRAFT") {
-      throw new AppError("Only draft or already soft-deleted events can be permanently deleted", 400);
-    }
 
-    // Additional safety: Check for revenue if it's not a super admin
-    if (!isSuperAdmin && event.totalRevenue > 0) {
-      throw new AppError("Cannot permanently delete an event with existing sales", 400);
-    }
 
     await Event.findByIdAndDelete(eventId);
 
@@ -708,9 +700,7 @@ export class EventService {
       throw new AppError("Unauthorized", 403);
     }
 
-    if (["LIVE", "ENDED"].includes(event.status)) {
-      throw new AppError("Cannot delete live or ended events", 400);
-    }
+
 
     // Soft delete
     event.isDeleted = true;
