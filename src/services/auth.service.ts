@@ -16,6 +16,24 @@ export class AuthService {
   }) {
     const { fullName, businessName, email, phone, password } = userData;
 
+    // Bot/Spam prevention
+    const localPart = email.split('@')[0];
+    const dotCount = (localPart.match(/\./g) || []).length;
+    
+    if (dotCount >= 4 || email.includes("..")) {
+      throw new AppError("Email address contains too many dots or invalid characters.", 400);
+    }
+
+    const isShortName = fullName.trim().length <= 2;
+    const isLongBusinessNoSpaces = businessName.length >= 12 && !businessName.includes(" ");
+    const isAllUpperCase = businessName === businessName.toUpperCase();
+    const upperCountAfterFirst = (businessName.substring(1).match(/[A-Z]/g) || []).length;
+    const isRandomStringLike = businessName.length >= 10 && !businessName.includes(" ") && upperCountAfterFirst >= 3 && !isAllUpperCase;
+
+    if ((isShortName && isLongBusinessNoSpaces) || isRandomStringLike) {
+      throw new AppError("Please provide a valid full name and organization name.", 400);
+    }
+
     if (!validatePassword(password)) {
       throw new AppError("Weak password", 400);
     }
