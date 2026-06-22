@@ -160,6 +160,11 @@ export class UserService {
       throw new AppError("Admins can only delete organizers", 403);
     }
 
+    const hasEvents = await Event.exists({ organizerId: id, isDeleted: false });
+    if (hasEvents && currentUserRole !== "SUPER_ADMIN") {
+      throw new AppError("Only super admins can delete organizers with active events", 403);
+    }
+
     user.isDeleted = true;
     user.deletedAt = new Date();
     user.status = "DISABLED";
