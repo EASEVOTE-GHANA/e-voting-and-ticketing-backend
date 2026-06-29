@@ -945,7 +945,7 @@ export class PurchaseService {
         for (const cat of purchase.eventId.categories) {
           const cand = cat.candidates?.find((c: any) => c._id?.toString() === purchase.candidateId.toString());
           if (cand) {
-            candidateObj = { name: cand.name, code: cand.code };
+            candidateObj = { name: cand.name, code: cand.code, categoryName: cat.name };
             break;
           }
         }
@@ -1032,7 +1032,7 @@ export class PurchaseService {
         for (const cat of purchase.eventId.categories) {
           const cand = cat.candidates?.find((c: any) => c._id?.toString() === purchase.candidateId.toString());
           if (cand) {
-            candidateObj = { name: cand.name, code: cand.code };
+            candidateObj = { name: cand.name, code: cand.code, categoryName: cat.name };
             break;
           }
         }
