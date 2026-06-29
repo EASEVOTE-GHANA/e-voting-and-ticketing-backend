@@ -941,7 +941,7 @@ export class PurchaseService {
 
     const processedPurchases = purchases.map((purchase: any) => {
       if (purchase.type === "VOTE" && purchase.candidateId && purchase.eventId?.categories) {
-        let candidateObj = null;
+        let candidateObj: { name: string; code: string } | null = null;
         for (const cat of purchase.eventId.categories) {
           const cand = cat.candidates?.find((c: any) => c._id?.toString() === purchase.candidateId.toString());
           if (cand) {
@@ -1015,7 +1015,7 @@ export class PurchaseService {
 
     const processedPurchases = purchases.map((purchase: any) => {
       if (purchase.type === "VOTE" && purchase.candidateId && purchase.eventId?.categories) {
-        let candidateObj = null;
+        let candidateObj: { name: string; code: string } | null = null;
         for (const cat of purchase.eventId.categories) {
           const cand = cat.candidates?.find((c: any) => c._id?.toString() === purchase.candidateId.toString());
           if (cand) {
