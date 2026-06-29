@@ -930,15 +930,34 @@ export class PurchaseService {
 
     const [purchases, total] = await Promise.all([
       Purchase.find(filter)
-        .populate("eventId", "title type")
+        .populate("eventId", "title type categories")
         .populate("userId", "fullName email")
         .sort(sort as any)
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
       Purchase.countDocuments(filter)
     ]);
 
-    return PaginationHelper.formatResponse(purchases, total, page, limit);
+    const processedPurchases = purchases.map((purchase: any) => {
+      if (purchase.type === "VOTE" && purchase.candidateId && purchase.eventId?.categories) {
+        let candidateObj = null;
+        for (const cat of purchase.eventId.categories) {
+          const cand = cat.candidates?.find((c: any) => c._id?.toString() === purchase.candidateId.toString());
+          if (cand) {
+            candidateObj = { name: cand.name, code: cand.code };
+            break;
+          }
+        }
+        purchase.candidate = candidateObj;
+      }
+      if (purchase.eventId) {
+        delete purchase.eventId.categories;
+      }
+      return purchase;
+    });
+
+    return PaginationHelper.formatResponse(processedPurchases, total, page, limit);
   }
 
   static async getOrganizerTransactions(organizerId: string, query: any) {
@@ -985,15 +1004,34 @@ export class PurchaseService {
 
     const [purchases, total] = await Promise.all([
       Purchase.find(filter)
-        .populate("eventId", "title type")
+        .populate("eventId", "title type categories")
         .populate("userId", "fullName email")
         .sort(sort as any)
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
       Purchase.countDocuments(filter)
     ]);
 
-    return PaginationHelper.formatResponse(purchases, total, page, limit);
+    const processedPurchases = purchases.map((purchase: any) => {
+      if (purchase.type === "VOTE" && purchase.candidateId && purchase.eventId?.categories) {
+        let candidateObj = null;
+        for (const cat of purchase.eventId.categories) {
+          const cand = cat.candidates?.find((c: any) => c._id?.toString() === purchase.candidateId.toString());
+          if (cand) {
+            candidateObj = { name: cand.name, code: cand.code };
+            break;
+          }
+        }
+        purchase.candidate = candidateObj;
+      }
+      if (purchase.eventId) {
+        delete purchase.eventId.categories;
+      }
+      return purchase;
+    });
+
+    return PaginationHelper.formatResponse(processedPurchases, total, page, limit);
   }
 
   static async getRevenueStats() {
