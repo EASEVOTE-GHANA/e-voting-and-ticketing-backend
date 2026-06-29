@@ -958,11 +958,16 @@ export class PurchaseService {
           purchase.candidate = { name: "Unknown Ticket", code: "Ticket" };
         }
       }
-      if (purchase.eventId) {
+      return purchase;
+    });
+
+    const processedEvents = new Set();
+    processedPurchases.forEach((purchase: any) => {
+      if (purchase.eventId && purchase.eventId._id && !processedEvents.has(purchase.eventId._id.toString())) {
+        processedEvents.add(purchase.eventId._id.toString());
         delete purchase.eventId.categories;
         delete purchase.eventId.ticketTypes;
       }
-      return purchase;
     });
 
     return PaginationHelper.formatResponse(processedPurchases, total, page, limit);
@@ -1040,11 +1045,16 @@ export class PurchaseService {
           purchase.candidate = { name: "Unknown Ticket", code: "Ticket" };
         }
       }
-      if (purchase.eventId) {
+      return purchase;
+    });
+
+    const processedEvents = new Set();
+    processedPurchases.forEach((purchase: any) => {
+      if (purchase.eventId && purchase.eventId._id && !processedEvents.has(purchase.eventId._id.toString())) {
+        processedEvents.add(purchase.eventId._id.toString());
         delete purchase.eventId.categories;
         delete purchase.eventId.ticketTypes;
       }
-      return purchase;
     });
 
     return PaginationHelper.formatResponse(processedPurchases, total, page, limit);
