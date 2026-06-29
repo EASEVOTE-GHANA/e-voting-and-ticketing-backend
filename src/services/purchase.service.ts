@@ -949,7 +949,7 @@ export class PurchaseService {
             break;
           }
         }
-        purchase.candidate = candidateObj;
+        purchase.candidate = candidateObj || { name: "Deleted Candidate", code: "N/A" };
       }
       if (purchase.eventId) {
         delete purchase.eventId.categories;
@@ -1023,7 +1023,7 @@ export class PurchaseService {
             break;
           }
         }
-        purchase.candidate = candidateObj;
+        purchase.candidate = candidateObj || { name: "Deleted Candidate", code: "N/A" };
       }
       if (purchase.eventId) {
         delete purchase.eventId.categories;
