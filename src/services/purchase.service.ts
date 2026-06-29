@@ -917,6 +917,14 @@ export class PurchaseService {
     if (query.gateway && query.gateway !== "ALL") filter.paymentGateway = query.gateway;
     if (query.channel && query.channel !== "ALL") filter.source = query.channel.toLowerCase();
 
+    if (query.date) {
+      const startOfDay = new Date(query.date);
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      const endOfDay = new Date(query.date);
+      endOfDay.setUTCHours(23, 59, 59, 999);
+      filter.createdAt = { $gte: startOfDay, $lte: endOfDay };
+    }
+
     // Sort by createdAt desc by default
     const sort = { createdAt: -1 };
 
@@ -966,6 +974,14 @@ export class PurchaseService {
     if (query.type && query.type !== "ALL") filter.type = query.type;
     if (query.gateway && query.gateway !== "ALL") filter.paymentGateway = query.gateway;
     if (query.channel && query.channel !== "ALL") filter.source = query.channel.toLowerCase();
+
+    if (query.date) {
+      const startOfDay = new Date(query.date);
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      const endOfDay = new Date(query.date);
+      endOfDay.setUTCHours(23, 59, 59, 999);
+      filter.createdAt = { $gte: startOfDay, $lte: endOfDay };
+    }
 
     const [purchases, total] = await Promise.all([
       Purchase.find(filter)
