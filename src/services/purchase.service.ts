@@ -14,10 +14,13 @@ import { EmailService } from "./email.service";
 import { SMSService } from "./sms.service";
 import crypto from "crypto";
 import { IPurchase } from "../models/Purchase.model";
-import { IPaymentGateway, PaymentVerificationResult } from "../payment-gateway.interface";
+import {
+  IPaymentGateway,
+  PaymentVerificationResult,
+} from "../payment-gateway.interface";
 import mongoose, { HydratedDocument } from "mongoose";
 
-type PaymentGateway = 'paystack' | 'appsmobile' | 'moolre' | 'nalo';
+type PaymentGateway = "paystack" | "appsmobile" | "moolre" | "nalo";
 
 export class PurchaseService {
   private static async getDefaultGateway(): Promise<PaymentGateway> {
@@ -26,13 +29,13 @@ export class PurchaseService {
 
   private static getGatewayService(gateway: PaymentGateway): IPaymentGateway {
     switch (gateway) {
-      case 'paystack':
+      case "paystack":
         return new PaystackService();
-      case 'appsmobile':
+      case "appsmobile":
         return new AppsMobileService();
-      case 'moolre':
+      case "moolre":
         return new MoolreService();
-      case 'nalo':
+      case "nalo":
         return new NaloPaymentService();
       default:
         return new PaystackService();
@@ -45,27 +48,39 @@ export class PurchaseService {
   static generateTicketNumber(): string {
     return `TK-${crypto.randomBytes(5).toString("hex").toUpperCase()}`;
   }
-  
+
   /**
    * Comprehensive check for event availability for payments/voting
    */
-  public static async validateEventAvailability(eventOrId: any, type: 'VOTING' | 'TICKETING') {
-    const event = typeof eventOrId === 'string' ? await Event.findById(eventOrId) : eventOrId;
+  public static async validateEventAvailability(
+    eventOrId: any,
+    type: "VOTING" | "TICKETING",
+  ) {
+    const event =
+      typeof eventOrId === "string"
+        ? await Event.findById(eventOrId)
+        : eventOrId;
 
     if (!event) {
       throw new AppError("Event not found", 404);
     }
-    
+
     if (event.isDeleted) {
       throw new AppError("Event has been removed", 410);
     }
 
     if (event.status === "SUSPENDED") {
-      throw new AppError("Event is currently suspended. Payments are not allowed.", 403);
+      throw new AppError(
+        "Event is currently suspended. Payments are not allowed.",
+        403,
+      );
     }
 
     if (event.status === "PAUSED") {
-      throw new AppError("Event is currently paused. Please try again later.", 403);
+      throw new AppError(
+        "Event is currently paused. Please try again later.",
+        403,
+      );
     }
 
     if (event.status === "CANCELLED") {
@@ -80,24 +95,35 @@ export class PurchaseService {
     // But for payments, we strictly need PUBLISHED or LIVE
     const allowedStatuses = ["PUBLISHED", "LIVE"];
     if (!allowedStatuses.includes(event.status)) {
-      throw new AppError(`Event is not open for ${type === 'TICKETING' ? 'ticket purchases' : 'voting'} at this time`, 400);
+      throw new AppError(
+        `Event is not open for ${type === "TICKETING" ? "ticket purchases" : "voting"} at this time`,
+        400,
+      );
     }
 
     return event;
   }
 
   static async initializeTicketPurchase(data: any) {
-    console.log(`[PurchaseService] initializeTicketPurchase called with:`, JSON.stringify(data, null, 2));
-    const event = await this.validateEventAvailability(data.eventId, 'TICKETING');
+    console.log(
+      `[PurchaseService] initializeTicketPurchase called with:`,
+      JSON.stringify(data, null, 2),
+    );
+    const event = await this.validateEventAvailability(
+      data.eventId,
+      "TICKETING",
+    );
 
-
-    const ticketType = event.ticketTypes?.find(tt => tt._id?.toString() === data.ticketTypeId);
+    const ticketType = event.ticketTypes?.find(
+      (tt) => tt._id?.toString() === data.ticketTypeId,
+    );
     if (!ticketType) {
       throw new AppError("Ticket type not found", 404);
     }
 
     // Check availability (total sold + reserved + new quantity)
-    const totalUnavailable = (ticketType.sold || 0) + (ticketType.reserved || 0);
+    const totalUnavailable =
+      (ticketType.sold || 0) + (ticketType.reserved || 0);
     if (totalUnavailable + data.quantity > ticketType.quantity) {
       throw new AppError("Not enough tickets available", 400);
     }
@@ -108,11 +134,12 @@ export class PurchaseService {
 
     const amount = ticketType.price * data.quantity;
     const reference = this.generateReference();
-    
+
     // Hold tickets for 30.5 minutes (Paystack URL expires in 30 minutes)
     const expiresAt = new Date(Date.now() + 30.5 * 60 * 1000);
 
-    const resolvedEmail = data.customerEmail || `${event.eventCode}@easevote.com`;
+    const resolvedEmail =
+      data.customerEmail || `${event.eventCode}@easevote.com`;
 
     const gateway = await this.getDefaultGateway();
     const gatewayService = this.getGatewayService(gateway);
@@ -130,11 +157,13 @@ export class PurchaseService {
       customerEmail: resolvedEmail,
       customerName: data.customerName,
       customerPhone: data.customerPhone,
-      paymentGateway: gateway.toUpperCase()
+      paymentGateway: gateway.toUpperCase(),
     });
-    
-    console.log(`[PurchaseService] Initializing ticket purchase for ${resolvedEmail}. Event: ${data.eventId}, Amount: ${amount}, Reference: ${reference}, Gateway: ${gateway}`);
-    
+
+    console.log(
+      `[PurchaseService] Initializing ticket purchase for ${resolvedEmail}. Event: ${data.eventId}, Amount: ${amount}, Reference: ${reference}, Gateway: ${gateway}`,
+    );
+
     const paymentData = await gatewayService.initializePayment({
       email: resolvedEmail,
       amount,
@@ -149,20 +178,23 @@ export class PurchaseService {
         customerEmail: resolvedEmail,
         customerName: data.customerName,
         customerPhone: data.customerPhone,
-        userId: data.userId
-      }
+        userId: data.userId,
+      },
     });
 
     return {
       purchase,
       paymentUrl: paymentData.authorization_url,
-      reference
+      reference,
     };
   }
 
   static async initializeVotePurchase(data: any) {
-    console.log(`[PurchaseService] initializeVotePurchase called with:`, JSON.stringify(data, null, 2));
-    const event = await this.validateEventAvailability(data.eventId, 'VOTING');
+    console.log(
+      `[PurchaseService] initializeVotePurchase called with:`,
+      JSON.stringify(data, null, 2),
+    );
+    const event = await this.validateEventAvailability(data.eventId, "VOTING");
 
     // Check voting time window
     const now = new Date();
@@ -181,31 +213,48 @@ export class PurchaseService {
     }
 
     // Validate vote limits
-    if (event.minVotesPerPurchase && data.voteCount < event.minVotesPerPurchase) {
-      throw new AppError(`Minimum ${event.minVotesPerPurchase} votes required`, 400);
+    if (
+      event.minVotesPerPurchase &&
+      data.voteCount < event.minVotesPerPurchase
+    ) {
+      throw new AppError(
+        `Minimum ${event.minVotesPerPurchase} votes required`,
+        400,
+      );
     }
 
-    if (event.maxVotesPerPurchase && data.voteCount > event.maxVotesPerPurchase) {
-      throw new AppError(`Maximum ${event.maxVotesPerPurchase} votes allowed`, 400);
+    if (
+      event.maxVotesPerPurchase &&
+      data.voteCount > event.maxVotesPerPurchase
+    ) {
+      throw new AppError(
+        `Maximum ${event.maxVotesPerPurchase} votes allowed`,
+        400,
+      );
     }
 
-    const category = event.categories?.find(cat => cat._id?.toString() === data.categoryId);
+    const category = event.categories?.find(
+      (cat) => cat._id?.toString() === data.categoryId,
+    );
     if (!category) {
       throw new AppError("Category not found", 404);
     }
 
-    const candidate = category.candidates.find(cand => cand._id?.toString() === data.candidateId);
+    const candidate = category.candidates.find(
+      (cand) => cand._id?.toString() === data.candidateId,
+    );
     if (!candidate) {
       throw new AppError("Candidate not found", 404);
     }
 
     const amount = event.costPerVote * data.voteCount;
     const reference = this.generateReference();
-    
+
     // Hold votes for 30.5 minutes
     const expiresAt = new Date(Date.now() + 30.5 * 60 * 1000);
 
-    const resolvedEmail = data.customerEmail || `${event.eventCode}@easevote.com`;
+    const resolvedEmail =
+      data.customerEmail || `${event.eventCode}@easevote.com`;
 
     const gateway = await this.getDefaultGateway();
     const gatewayService = this.getGatewayService(gateway);
@@ -224,11 +273,13 @@ export class PurchaseService {
       customerEmail: resolvedEmail,
       customerName: data.customerName,
       customerPhone: data.customerPhone,
-      paymentGateway: gateway.toUpperCase()
+      paymentGateway: gateway.toUpperCase(),
     });
-    
-    console.log(`[PurchaseService] Initializing vote purchase for ${resolvedEmail}. Event: ${data.eventId}, Amount: ${amount}, Reference: ${reference}, Gateway: ${gateway}`);
-    
+
+    console.log(
+      `[PurchaseService] Initializing vote purchase for ${resolvedEmail}. Event: ${data.eventId}, Amount: ${amount}, Reference: ${reference}, Gateway: ${gateway}`,
+    );
+
     const paymentData = await gatewayService.initializePayment({
       email: resolvedEmail,
       amount,
@@ -248,35 +299,43 @@ export class PurchaseService {
         customerEmail: resolvedEmail,
         customerName: data.customerName,
         customerPhone: data.customerPhone,
-        userId: data.userId
-      }
+        userId: data.userId,
+      },
     });
 
     return {
       purchase,
       paymentUrl: paymentData.authorization_url,
-      reference
+      reference,
     };
   }
 
   static async verifyPayment(reference: string) {
     const paymentData = await this.verifyWithGateway(reference);
-    
-    // Reconcile/Find the purchase record using metadata if necessary
-    const purchase = await this.reconcilePurchase(reference, paymentData.metadata, paymentData.amount || 0);
 
-    // Robust Fallback: Enrich the response with event and candidate details 
+    // Reconcile/Find the purchase record using metadata if necessary
+    const purchase = await this.reconcilePurchase(
+      reference,
+      paymentData.metadata,
+      paymentData.amount || 0,
+    );
+
+    // Robust Fallback: Enrich the response with event and candidate details
     // This allows the success page to show names even if metadata is missing.
     const event = await Event.findById(purchase.eventId);
     let extraDetails: any = {};
-    
+
     if (event) {
       extraDetails.eventTitle = event.title;
       extraDetails.eventCode = event.eventCode;
-      
+
       if (purchase.type === "VOTE" && purchase.candidateId) {
-        const category = event.categories?.find(cat => cat._id?.toString() === purchase.categoryId?.toString());
-        const candidate = category?.candidates.find(cand => cand._id?.toString() === purchase.candidateId?.toString());
+        const category = event.categories?.find(
+          (cat) => cat._id?.toString() === purchase.categoryId?.toString(),
+        );
+        const candidate = category?.candidates.find(
+          (cand) => cand._id?.toString() === purchase.candidateId?.toString(),
+        );
         if (candidate) {
           extraDetails.candidateName = candidate.name;
         }
@@ -284,22 +343,22 @@ export class PurchaseService {
     }
 
     if (purchase.status === "PAID") {
-      return { 
-        purchase, 
+      return {
+        purchase,
         message: "Payment already verified",
-        ...extraDetails
+        ...extraDetails,
       };
     }
-    
+
     if (!paymentData.success) {
       purchase.status = "FAILED";
       await purchase.save();
-      
+
       // Unreserve tickets for failed verification
       if (purchase.type === "TICKET") {
         await this.unreserveTickets(purchase);
       }
-      
+
       throw new AppError("Payment verification failed", 400);
     }
 
@@ -325,10 +384,10 @@ export class PurchaseService {
     // Notify Customer (Email & SMS)
     await this.notifyCustomerOfPurchase(purchase);
 
-    return { 
-      purchase, 
+    return {
+      purchase,
       paymentData,
-      ...extraDetails 
+      ...extraDetails,
     };
   }
 
@@ -337,20 +396,22 @@ export class PurchaseService {
       const event = await Event.findById(purchase.eventId);
       if (!event) return;
 
-      const title = purchase.type === "TICKET" ? "New Ticket Sold" : "New Vote Received";
-      const message = purchase.type === "TICKET" 
-        ? `${purchase.ticketQuantity} ticket(s) sold for "${event.title}".`
-        : `${purchase.voteCount} vote(s) received for "${event.title}".`;
+      const title =
+        purchase.type === "TICKET" ? "New Ticket Sold" : "New Vote Received";
+      const message =
+        purchase.type === "TICKET"
+          ? `${purchase.ticketQuantity} ticket(s) sold for "${event.title}".`
+          : `${purchase.voteCount} vote(s) received for "${event.title}".`;
 
       await NotificationService.create({
         userId: event.organizerId,
         title,
         message,
         type: purchase.type === "TICKET" ? "EVENT" : "PAYMENT",
-        metadata: { 
+        metadata: {
           eventId: event._id,
-          purchaseId: purchase._id
-        }
+          purchaseId: purchase._id,
+        },
       });
     } catch (err) {
       console.error("Failed to notify organizer of purchase:", err);
@@ -364,17 +425,18 @@ export class PurchaseService {
 
       if (purchase.type === "TICKET") {
         const tickets = await Ticket.find({ purchaseId: purchase._id });
-        
+
         // Find ticket type name from event
         const ticketTypeNames: Record<string, string> = {};
-        event.ticketTypes?.forEach(tt => {
+        event.ticketTypes?.forEach((tt) => {
           ticketTypeNames[tt._id!.toString()] = tt.name;
         });
 
-        const ticketData = tickets.map(t => ({
+        const ticketData = tickets.map((t) => ({
           ticketNumber: t.ticketNumber,
-          ticketTypeName: ticketTypeNames[t.ticketTypeId.toString()] || "Standard Ticket",
-          qrData: t.qrData
+          ticketTypeName:
+            ticketTypeNames[t.ticketTypeId.toString()] || "Standard Ticket",
+          qrData: t.qrData,
         }));
 
         // Send Email
@@ -388,7 +450,7 @@ export class PurchaseService {
             tickets: ticketData,
             totalAmount: purchase.amount,
             reference: purchase.paymentReference,
-            eventImage: event.imageUrl
+            eventImage: event.imageUrl,
           });
         } catch (emailErr) {
           console.error("Failed to send ticket email:", emailErr);
@@ -401,7 +463,7 @@ export class PurchaseService {
               purchase.customerPhone,
               event.title,
               purchase.ticketQuantity || 0,
-              purchase.paymentReference
+              purchase.paymentReference,
             );
           } catch (smsErr) {
             console.error("Failed to send ticket SMS:", smsErr);
@@ -411,8 +473,10 @@ export class PurchaseService {
         // Find candidate name
         let candidateName = "Candidate";
         let categoryName = "Category";
-        event.categories?.forEach(cat => {
-          const cand = cat.candidates.find(c => c._id?.toString() === purchase.candidateId?.toString());
+        event.categories?.forEach((cat) => {
+          const cand = cat.candidates.find(
+            (c) => c._id?.toString() === purchase.candidateId?.toString(),
+          );
           if (cand) {
             candidateName = cand.name;
             categoryName = cat.name;
@@ -428,7 +492,7 @@ export class PurchaseService {
             candidateName: candidateName,
             voteCount: purchase.voteCount || 0,
             totalAmount: purchase.amount,
-            reference: purchase.paymentReference
+            reference: purchase.paymentReference,
           });
         } catch (emailErr) {
           console.error("Failed to send vote email:", emailErr);
@@ -442,7 +506,7 @@ export class PurchaseService {
               purchase.amount,
               purchase.voteCount || 0,
               candidateName,
-              categoryName
+              categoryName,
             );
           } catch (smsErr) {
             console.error("Failed to send vote SMS:", smsErr);
@@ -454,12 +518,14 @@ export class PurchaseService {
     }
   }
 
-  static async verifyWithGateway(reference: string): Promise<PaymentVerificationResult> {
+  static async verifyWithGateway(
+    reference: string,
+  ): Promise<PaymentVerificationResult> {
     const gateway = await this.getDefaultGateway();
     const gatewayService = this.getGatewayService(gateway);
-    
+
     const result = await gatewayService.verifyPayment(reference);
-    
+
     return {
       success: result.success,
       status: result.status,
@@ -467,22 +533,31 @@ export class PurchaseService {
       currency: result.currency,
       reference: result.reference,
       metadata: result.metadata,
-      gatewayData: result
+      gatewayData: result,
     };
   }
 
-  static async reconcilePurchase(reference: string, metadata: any, amount: number): Promise<HydratedDocument<IPurchase>> {
+  static async reconcilePurchase(
+    reference: string,
+    metadata: any,
+    amount: number,
+  ): Promise<HydratedDocument<IPurchase>> {
     let purchase = await Purchase.findOne({ paymentReference: reference });
-    
+
     if (purchase) {
       return purchase;
     }
 
     if (!metadata) {
-      throw new AppError("Purchase not found and no metadata available for reconstruction", 404);
+      throw new AppError(
+        "Purchase not found and no metadata available for reconstruction",
+        404,
+      );
     }
 
-    console.log(`[PurchaseService] Reconstructing missing purchase from metadata for reference: ${reference}`);
+    console.log(
+      `[PurchaseService] Reconstructing missing purchase from metadata for reference: ${reference}`,
+    );
 
     const purchaseData: any = {
       paymentReference: reference,
@@ -494,7 +569,7 @@ export class PurchaseService {
       customerEmail: metadata.customerEmail,
       customerName: metadata.customerName,
       customerPhone: metadata.customerPhone,
-      expiresAt: new Date(Date.now() + 30 * 60 * 1000) // Default expiry if reconstructed
+      expiresAt: new Date(Date.now() + 30 * 60 * 1000), // Default expiry if reconstructed
     };
 
     if (metadata.type === "TICKET") {
@@ -512,7 +587,6 @@ export class PurchaseService {
   static async generateTickets(purchase: IPurchase) {
     const tickets: HydratedDocument<ITicket>[] = [];
 
-    
     for (let i = 0; i < purchase.ticketQuantity!; i++) {
       const ticketNumber = this.generateTicketNumber();
       const qrData = ticketNumber;
@@ -525,13 +599,13 @@ export class PurchaseService {
         qrData,
         customerEmail: purchase.customerEmail,
         customerName: purchase.customerName,
-        customerPhone: purchase.customerPhone
+        customerPhone: purchase.customerPhone,
       });
 
       tickets.push(ticket);
     }
 
-    purchase.ticketNumbers = tickets.map(t => t.ticketNumber);
+    purchase.ticketNumbers = tickets.map((t) => t.ticketNumber);
     await purchase.save();
 
     return tickets;
@@ -541,39 +615,47 @@ export class PurchaseService {
     const event = await Event.findById(purchase.eventId);
     if (!event) return;
 
-    const category = event.categories?.find(cat => cat._id?.toString() === purchase.categoryId?.toString());
+    const category = event.categories?.find(
+      (cat) => cat._id?.toString() === purchase.categoryId?.toString(),
+    );
     if (!category) return;
 
-    const candidate = category.candidates.find(cand => cand._id?.toString() === purchase.candidateId?.toString());
+    const candidate = category.candidates.find(
+      (cand) => cand._id?.toString() === purchase.candidateId?.toString(),
+    );
     if (!candidate) return;
 
     candidate.votes = (candidate.votes || 0) + purchase.voteCount!;
-    
+
     // Increment verified stats
     event.totalRevenue = (event.totalRevenue || 0) + purchase.amount;
     event.totalPaidVotes = (event.totalPaidVotes || 0) + purchase.voteCount!;
-    
+
     // Ensure nesting changes are saved
-    event.markModified('categories');
+    event.markModified("categories");
     await event.save();
   }
 
   static async getPurchaseHistory(userId: string, query: any) {
     const { page, limit, skip } = PaginationHelper.getParams(query);
-    
+
     const [purchases, total] = await Promise.all([
       Purchase.find({ userId })
         .populate("eventId", "title type")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
-      Purchase.countDocuments({ userId })
+      Purchase.countDocuments({ userId }),
     ]);
 
     return PaginationHelper.formatResponse(purchases, total, page, limit);
   }
 
-  static async getEventPurchases(eventId: string, organizerId: string, query: any) {
+  static async getEventPurchases(
+    eventId: string,
+    organizerId: string,
+    query: any,
+  ) {
     const event = await Event.findById(eventId);
     if (!event) {
       throw new AppError("Event not found", 404);
@@ -584,14 +666,14 @@ export class PurchaseService {
     }
 
     const { page, limit, skip } = PaginationHelper.getParams(query);
-    
+
     const [purchases, total] = await Promise.all([
       Purchase.find({ eventId, status: "PAID" })
         .populate("userId", "fullName email")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
-      Purchase.countDocuments({ eventId, status: "PAID" })
+      Purchase.countDocuments({ eventId, status: "PAID" }),
     ]);
 
     return PaginationHelper.formatResponse(purchases, total, page, limit);
@@ -600,36 +682,42 @@ export class PurchaseService {
   static async handleWebhook(req: any): Promise<{ success: boolean }> {
     // Detect gateway from headers or use default
     let gateway: PaymentGateway = await this.getDefaultGateway();
-    
+
     // Simple gateway detection based on headers
-    if (req.headers['x-paystack-signature']) {
-      gateway = 'paystack';
-    } else if (req.body?.data?.txstatus !== undefined && req.body?.data?.externalref) {
-      gateway = 'moolre';
+    if (req.headers["x-paystack-signature"]) {
+      gateway = "paystack";
+    } else if (
+      req.body?.data?.txstatus !== undefined &&
+      req.body?.data?.externalref
+    ) {
+      gateway = "moolre";
     } else if (req.body?.trans_status) {
-      gateway = 'appsmobile';
+      gateway = "appsmobile";
     } else if (req.body?.order_id && req.body?.status) {
-      gateway = 'nalo';
+      gateway = "nalo";
     }
-    
+
     const gatewayService = this.getGatewayService(gateway);
     const webhookResult = await gatewayService.handleWebhook(req);
-    
+
     if (!webhookResult.isValid) {
       return { success: false };
     }
 
     if (webhookResult.reference) {
-      if (webhookResult.status === 'success') {
-        console.log('Processing successful payment for reference:', webhookResult.reference);
-        
+      if (webhookResult.status === "success") {
+        console.log(
+          "Processing successful payment for reference:",
+          webhookResult.reference,
+        );
+
         // Reconcile/Find the purchase record using metadata if available
         const purchase = await this.reconcilePurchase(
-          webhookResult.reference, 
-          webhookResult.metadata, 
-          webhookResult.amount || 0
+          webhookResult.reference,
+          webhookResult.metadata,
+          webhookResult.amount || 0,
         );
-        
+
         if (purchase.status !== "PAID") {
           purchase.status = "PAID";
           purchase.paidAt = new Date();
@@ -638,12 +726,12 @@ export class PurchaseService {
           if (purchase.amount === 0 && webhookResult.amount) {
             purchase.amount = webhookResult.amount;
           }
-          
+
           // Prioritize gateway-provided customer phone (e.g., Paystack MoMo number)
           if (webhookResult.customerPhone) {
             purchase.customerPhone = webhookResult.customerPhone;
           }
-          
+
           await purchase.save();
 
           if (purchase.type === "TICKET") {
@@ -657,7 +745,10 @@ export class PurchaseService {
           await this.notifyCustomerOfPurchase(purchase);
         }
       } else {
-        console.log('Processing failed payment for reference:', webhookResult.reference);
+        console.log(
+          "Processing failed payment for reference:",
+          webhookResult.reference,
+        );
         await this.processFailedPayment(webhookResult.reference);
       }
     }
@@ -667,7 +758,7 @@ export class PurchaseService {
 
   static async processSuccessfulPayment(reference: string) {
     const purchase = await Purchase.findOne({ paymentReference: reference });
-    
+
     if (purchase && purchase.status !== "PAID") {
       purchase.status = "PAID";
       purchase.paidAt = new Date();
@@ -690,23 +781,29 @@ export class PurchaseService {
     const event = await Event.findById(purchase.eventId);
     if (!event) return;
 
-    const ticketType = event.ticketTypes?.find(tt => tt._id?.toString() === purchase.ticketTypeId?.toString());
+    const ticketType = event.ticketTypes?.find(
+      (tt) => tt._id?.toString() === purchase.ticketTypeId?.toString(),
+    );
     if (!ticketType) return;
 
     // Move from reserved to sold
-    ticketType.reserved = Math.max(0, (ticketType.reserved || 0) - purchase.ticketQuantity!);
+    ticketType.reserved = Math.max(
+      0,
+      (ticketType.reserved || 0) - purchase.ticketQuantity!,
+    );
     ticketType.sold = (ticketType.sold || 0) + purchase.ticketQuantity!;
-    
+
     // Increment verified stats
     event.totalRevenue = (event.totalRevenue || 0) + purchase.amount;
-    event.totalTicketsSold = (event.totalTicketsSold || 0) + purchase.ticketQuantity!;
-    
+    event.totalTicketsSold =
+      (event.totalTicketsSold || 0) + purchase.ticketQuantity!;
+
     await event.save();
   }
 
   static async processFailedPayment(reference: string) {
     const purchase = await Purchase.findOne({ paymentReference: reference });
-    
+
     if (purchase && purchase.status === "PENDING") {
       purchase.status = "FAILED";
       await purchase.save();
@@ -722,11 +819,16 @@ export class PurchaseService {
     const event = await Event.findById(purchase.eventId);
     if (!event) return;
 
-    const ticketType = event.ticketTypes?.find(tt => tt._id?.toString() === purchase.ticketTypeId?.toString());
+    const ticketType = event.ticketTypes?.find(
+      (tt) => tt._id?.toString() === purchase.ticketTypeId?.toString(),
+    );
     if (!ticketType) return;
 
     // Remove reservation
-    ticketType.reserved = Math.max(0, (ticketType.reserved || 0) - purchase.ticketQuantity!);
+    ticketType.reserved = Math.max(
+      0,
+      (ticketType.reserved || 0) - purchase.ticketQuantity!,
+    );
     await event.save();
   }
 
@@ -738,15 +840,20 @@ export class PurchaseService {
     network: string;
     source: "ussd";
   }) {
-    const event = await this.validateEventAvailability(data.eventId, 'TICKETING');
+    const event = await this.validateEventAvailability(
+      data.eventId,
+      "TICKETING",
+    );
 
-
-    const ticketType = event.ticketTypes?.find(tt => tt._id?.toString() === data.ticketTypeId);
+    const ticketType = event.ticketTypes?.find(
+      (tt) => tt._id?.toString() === data.ticketTypeId,
+    );
     if (!ticketType) {
       throw new AppError("Ticket type not found", 404);
     }
 
-    const totalUnavailable = (ticketType.sold || 0) + (ticketType.reserved || 0);
+    const totalUnavailable =
+      (ticketType.sold || 0) + (ticketType.reserved || 0);
     if (totalUnavailable + data.quantity > ticketType.quantity) {
       throw new AppError("Not enough tickets available", 400);
     }
@@ -772,34 +879,41 @@ export class PurchaseService {
       expiresAt,
       customerEmail: `${event.eventCode}@easevote.com`,
       customerPhone: data.customerPhone,
-      paymentGateway: gateway.toUpperCase()
+      paymentGateway: gateway.toUpperCase(),
     });
 
     if (!gatewayService.initializeUSSDPayment) {
-      throw new AppError("Selected gateway does not support USSD payments", 400);
+      throw new AppError(
+        "Selected gateway does not support USSD payments",
+        400,
+      );
     }
 
-    console.log(`[PurchaseService] Initializing ticket purchase (USSD) for ${data.customerPhone}. Event: ${data.eventId}, Amount: ${amount}, Reference: ${reference}, Gateway: ${gateway}`);
-    
+    console.log(
+      `[PurchaseService] Initializing ticket purchase (USSD) for ${data.customerPhone}. Event: ${data.eventId}, Amount: ${amount}, Reference: ${reference}, Gateway: ${gateway}`,
+    );
+
     const paymentData = await gatewayService.initializeUSSDPayment({
       email: `${event.eventCode}@easevote.com`,
       amount,
       reference,
       network: data.network,
       customerPhone: data.customerPhone,
-      callback_url: process.env.CALLBACK_URL || `${process.env.API_URL || 'https://api-dev.easevotegh.com'}/api/purchases/webhook/payment`,
+      callback_url:
+        process.env.CALLBACK_URL ||
+        `${process.env.API_URL || "https://api-dev.easevotegh.com"}/api/purchases/webhook/payment`,
       metadata: {
         purchaseId: purchase._id,
         eventId: data.eventId,
         type: "TICKET",
-        source: "ussd"
-      }
+        source: "ussd",
+      },
     });
 
     return {
       purchase,
       paymentUrl: paymentData.success ? "USSD_INITIATED" : "FAILED",
-      reference
+      reference,
     };
   }
 
@@ -812,7 +926,7 @@ export class PurchaseService {
     network: string;
     source: "ussd";
   }) {
-    const event = await this.validateEventAvailability(data.eventId, 'VOTING');
+    const event = await this.validateEventAvailability(data.eventId, "VOTING");
     if (!event) throw new AppError("Event not found", 404);
 
     const now = new Date();
@@ -830,12 +944,24 @@ export class PurchaseService {
       throw new AppError("Voting not configured for this event", 400);
     }
 
-    if (event.minVotesPerPurchase && data.voteCount < event.minVotesPerPurchase) {
-      throw new AppError(`Minimum ${event.minVotesPerPurchase} votes required`, 400);
+    if (
+      event.minVotesPerPurchase &&
+      data.voteCount < event.minVotesPerPurchase
+    ) {
+      throw new AppError(
+        `Minimum ${event.minVotesPerPurchase} votes required`,
+        400,
+      );
     }
 
-    if (event.maxVotesPerPurchase && data.voteCount > event.maxVotesPerPurchase) {
-      throw new AppError(`Maximum ${event.maxVotesPerPurchase} votes allowed`, 400);
+    if (
+      event.maxVotesPerPurchase &&
+      data.voteCount > event.maxVotesPerPurchase
+    ) {
+      throw new AppError(
+        `Maximum ${event.maxVotesPerPurchase} votes allowed`,
+        400,
+      );
     }
 
     const amount = event.costPerVote * data.voteCount;
@@ -857,34 +983,41 @@ export class PurchaseService {
       expiresAt,
       customerEmail: `${event.eventCode}@easevote.com`,
       customerPhone: data.customerPhone,
-      paymentGateway: gateway.toUpperCase()
+      paymentGateway: gateway.toUpperCase(),
     });
 
     if (!gatewayService.initializeUSSDPayment) {
-      throw new AppError("Selected gateway does not support USSD payments", 400);
+      throw new AppError(
+        "Selected gateway does not support USSD payments",
+        400,
+      );
     }
 
-    console.log(`[PurchaseService] Initializing vote purchase (USSD) for ${data.customerPhone}. Event: ${data.eventId}, Amount: ${amount}, Reference: ${reference}, Gateway: ${gateway}`);
-    
+    console.log(
+      `[PurchaseService] Initializing vote purchase (USSD) for ${data.customerPhone}. Event: ${data.eventId}, Amount: ${amount}, Reference: ${reference}, Gateway: ${gateway}`,
+    );
+
     const paymentData = await gatewayService.initializeUSSDPayment({
       email: `${event.eventCode}@easevote.com`,
       amount,
       reference,
       network: data.network,
       customerPhone: data.customerPhone,
-      callback_url: process.env.CALLBACK_URL || `${process.env.API_URL || 'https://api-dev.easevotegh.com'}/api/purchases/webhook/payment`,
+      callback_url:
+        process.env.CALLBACK_URL ||
+        `${process.env.API_URL || "https://api-dev.easevotegh.com"}/api/purchases/webhook/payment`,
       metadata: {
         purchaseId: purchase._id,
         eventId: data.eventId,
         type: "VOTE",
-        source: "ussd"
-      }
+        source: "ussd",
+      },
     });
 
     return {
       purchase,
       paymentUrl: paymentData.success ? "USSD_INITIATED" : "FAILED",
-      reference
+      reference,
     };
   }
 
@@ -894,7 +1027,7 @@ export class PurchaseService {
 
   static async getAllTransactions(query: any) {
     const { page, limit, skip } = PaginationHelper.getParams(query);
-    
+
     const filter: any = {};
     if (query.eventId) {
       try {
@@ -903,7 +1036,7 @@ export class PurchaseService {
         filter.eventId = query.eventId; // Fallback
       }
     }
-    
+
     if (query.status && query.status !== "ALL") {
       // Map frontend status labels (SUCCESS) to backend ledger status (PAID)
       if (query.status === "SUCCESS" || query.status === "PAID") {
@@ -912,10 +1045,12 @@ export class PurchaseService {
         filter.status = query.status;
       }
     }
-    
+
     if (query.type && query.type !== "ALL") filter.type = query.type;
-    if (query.gateway && query.gateway !== "ALL") filter.paymentGateway = query.gateway;
-    if (query.channel && query.channel !== "ALL") filter.source = query.channel.toLowerCase();
+    if (query.gateway && query.gateway !== "ALL")
+      filter.paymentGateway = query.gateway;
+    if (query.channel && query.channel !== "ALL")
+      filter.source = query.channel.toLowerCase();
 
     if (query.date) {
       const startOfDay = new Date(query.date);
@@ -936,22 +1071,45 @@ export class PurchaseService {
         .skip(skip)
         .limit(limit)
         .lean(),
-      Purchase.countDocuments(filter)
+      Purchase.countDocuments(filter),
     ]);
 
     const processedPurchases = purchases.map((purchase: any) => {
-      if (purchase.type === "VOTE" && purchase.candidateId && purchase.eventId?.categories) {
-        let candidateObj: { name: string; code: string } | null = null;
+      if (
+        purchase.type === "VOTE" &&
+        purchase.candidateId &&
+        purchase.eventId?.categories
+      ) {
+        let candidateObj: {
+          name: string;
+          code: string;
+          category?: string;
+        } | null = null;
         for (const cat of purchase.eventId.categories) {
-          const cand = cat.candidates?.find((c: any) => c._id?.toString() === purchase.candidateId.toString());
+          const cand = cat.candidates?.find(
+            (c: any) => c._id?.toString() === purchase.candidateId.toString(),
+          );
           if (cand) {
-            candidateObj = { name: cand.name, code: cand.code };
+            candidateObj = {
+              name: cand.name,
+              code: cand.code,
+              category: cat.name,
+            };
             break;
           }
         }
-        purchase.candidate = candidateObj || { name: "Unknown Candidate", code: "N/A" };
-      } else if (purchase.type === "TICKET" && purchase.ticketTypeId && purchase.eventId?.ticketTypes) {
-        const tt = purchase.eventId.ticketTypes.find((t: any) => t._id?.toString() === purchase.ticketTypeId.toString());
+        purchase.candidate = candidateObj || {
+          name: "Unknown Candidate",
+          code: "N/A",
+        };
+      } else if (
+        purchase.type === "TICKET" &&
+        purchase.ticketTypeId &&
+        purchase.eventId?.ticketTypes
+      ) {
+        const tt = purchase.eventId.ticketTypes.find(
+          (t: any) => t._id?.toString() === purchase.ticketTypeId.toString(),
+        );
         if (tt) {
           purchase.candidate = { name: tt.name, code: "Ticket" };
         } else {
@@ -963,14 +1121,23 @@ export class PurchaseService {
 
     const processedEvents = new Set();
     processedPurchases.forEach((purchase: any) => {
-      if (purchase.eventId && purchase.eventId._id && !processedEvents.has(purchase.eventId._id.toString())) {
+      if (
+        purchase.eventId &&
+        purchase.eventId._id &&
+        !processedEvents.has(purchase.eventId._id.toString())
+      ) {
         processedEvents.add(purchase.eventId._id.toString());
         delete purchase.eventId.categories;
         delete purchase.eventId.ticketTypes;
       }
     });
 
-    return PaginationHelper.formatResponse(processedPurchases, total, page, limit);
+    return PaginationHelper.formatResponse(
+      processedPurchases,
+      total,
+      page,
+      limit,
+    );
   }
 
   static async getOrganizerTransactions(organizerId: string, query: any) {
@@ -978,23 +1145,26 @@ export class PurchaseService {
     const sort = { createdAt: -1 };
 
     // Find all event IDs for this organizer for baseline filter
-    const organizerEvents = await Event.find({ organizerId, isDeleted: false }).select("_id");
-    const baseEventIds = organizerEvents.map(e => e._id);
+    const organizerEvents = await Event.find({
+      organizerId,
+      isDeleted: false,
+    }).select("_id");
+    const baseEventIds = organizerEvents.map((e) => e._id);
 
     const filter: any = { eventId: { $in: baseEventIds } };
-    
+
     // Allow further narrowing by specific eventId if provided
     if (query.eventId) {
       try {
         const targetId = new mongoose.Types.ObjectId(query.eventId);
-        if (baseEventIds.some(id => id.toString() === targetId.toString())) {
+        if (baseEventIds.some((id) => id.toString() === targetId.toString())) {
           filter.eventId = targetId;
         }
       } catch (e) {
         // Handle malformed ID
       }
     }
-    
+
     if (query.status && query.status !== "ALL") {
       if (query.status === "SUCCESS" || query.status === "PAID") {
         filter.status = "PAID";
@@ -1004,8 +1174,10 @@ export class PurchaseService {
     }
 
     if (query.type && query.type !== "ALL") filter.type = query.type;
-    if (query.gateway && query.gateway !== "ALL") filter.paymentGateway = query.gateway;
-    if (query.channel && query.channel !== "ALL") filter.source = query.channel.toLowerCase();
+    if (query.gateway && query.gateway !== "ALL")
+      filter.paymentGateway = query.gateway;
+    if (query.channel && query.channel !== "ALL")
+      filter.source = query.channel.toLowerCase();
 
     if (query.date) {
       const startOfDay = new Date(query.date);
@@ -1023,22 +1195,45 @@ export class PurchaseService {
         .skip(skip)
         .limit(limit)
         .lean(),
-      Purchase.countDocuments(filter)
+      Purchase.countDocuments(filter),
     ]);
 
     const processedPurchases = purchases.map((purchase: any) => {
-      if (purchase.type === "VOTE" && purchase.candidateId && purchase.eventId?.categories) {
-        let candidateObj: { name: string; code: string } | null = null;
+      if (
+        purchase.type === "VOTE" &&
+        purchase.candidateId &&
+        purchase.eventId?.categories
+      ) {
+        let candidateObj: {
+          name: string;
+          code: string;
+          category?: string;
+        } | null = null;
         for (const cat of purchase.eventId.categories) {
-          const cand = cat.candidates?.find((c: any) => c._id?.toString() === purchase.candidateId.toString());
+          const cand = cat.candidates?.find(
+            (c: any) => c._id?.toString() === purchase.candidateId.toString(),
+          );
           if (cand) {
-            candidateObj = { name: cand.name, code: cand.code };
+            candidateObj = {
+              name: cand.name,
+              code: cand.code,
+              category: cat.name,
+            };
             break;
           }
         }
-        purchase.candidate = candidateObj || { name: "Unknown Candidate", code: "N/A" };
-      } else if (purchase.type === "TICKET" && purchase.ticketTypeId && purchase.eventId?.ticketTypes) {
-        const tt = purchase.eventId.ticketTypes.find((t: any) => t._id?.toString() === purchase.ticketTypeId.toString());
+        purchase.candidate = candidateObj || {
+          name: "Unknown Candidate",
+          code: "N/A",
+        };
+      } else if (
+        purchase.type === "TICKET" &&
+        purchase.ticketTypeId &&
+        purchase.eventId?.ticketTypes
+      ) {
+        const tt = purchase.eventId.ticketTypes.find(
+          (t: any) => t._id?.toString() === purchase.ticketTypeId.toString(),
+        );
         if (tt) {
           purchase.candidate = { name: tt.name, code: "Ticket" };
         } else {
@@ -1050,14 +1245,23 @@ export class PurchaseService {
 
     const processedEvents = new Set();
     processedPurchases.forEach((purchase: any) => {
-      if (purchase.eventId && purchase.eventId._id && !processedEvents.has(purchase.eventId._id.toString())) {
+      if (
+        purchase.eventId &&
+        purchase.eventId._id &&
+        !processedEvents.has(purchase.eventId._id.toString())
+      ) {
         processedEvents.add(purchase.eventId._id.toString());
         delete purchase.eventId.categories;
         delete purchase.eventId.ticketTypes;
       }
     });
 
-    return PaginationHelper.formatResponse(processedPurchases, total, page, limit);
+    return PaginationHelper.formatResponse(
+      processedPurchases,
+      total,
+      page,
+      limit,
+    );
   }
 
   static async getRevenueStats() {
@@ -1070,24 +1274,36 @@ export class PurchaseService {
         $facet: {
           paidStats: [
             { $match: { status: "PAID" } },
-            { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } }
+            {
+              $group: {
+                _id: null,
+                total: { $sum: "$amount" },
+                count: { $sum: 1 },
+              },
+            },
           ],
           allAttemptsCount: [
             { $match: { status: { $in: ["PAID", "FAILED"] } } },
-            { $count: "count" }
+            { $count: "count" },
           ],
           pendingCount: [
             { $match: { status: "PENDING" } },
-            { $count: "count" }
+            { $count: "count" },
           ],
           byType: [
             { $match: { status: "PAID" } },
             { $group: { _id: "$type", value: { $sum: "$amount" } } },
-            { $project: { name: "$_id", value: 1, _id: 0 } }
+            { $project: { name: "$_id", value: 1, _id: 0 } },
           ],
           topEvents: [
             { $match: { status: "PAID" } },
-            { $group: { _id: "$eventId", revenue: { $sum: "$amount" }, count: { $sum: 1 } } },
+            {
+              $group: {
+                _id: "$eventId",
+                revenue: { $sum: "$amount" },
+                count: { $sum: 1 },
+              },
+            },
             { $sort: { revenue: -1 } },
             { $limit: 5 },
             {
@@ -1095,8 +1311,8 @@ export class PurchaseService {
                 from: "events",
                 localField: "_id",
                 foreignField: "_id",
-                as: "event"
-              }
+                as: "event",
+              },
             },
             { $unwind: "$event" },
             {
@@ -1104,40 +1320,47 @@ export class PurchaseService {
                 title: "$event.title",
                 type: "$event.type",
                 revenue: 1,
-                count: 1
-              }
-            }
+                count: 1,
+              },
+            },
           ],
           trend: [
             {
               $match: {
                 status: "PAID",
-                createdAt: { $gte: last30Days }
-              }
+                createdAt: { $gte: last30Days },
+              },
             },
             {
               $group: {
-                _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-                revenue: { $sum: "$amount" }
-              }
+                _id: {
+                  $dateToString: { format: "%Y-%m-%d", date: "$createdAt" },
+                },
+                revenue: { $sum: "$amount" },
+              },
             },
             { $sort: { _id: 1 } },
-            { $project: { date: "$_id", revenue: 1, _id: 0 } }
-          ]
-        }
-      }
+            { $project: { date: "$_id", revenue: 1, _id: 0 } },
+          ],
+        },
+      },
     ]);
 
     const result = overallStats[0];
     const paidTotals = result.paidStats[0] || { total: 0, count: 0 };
     const allAttempts = result.allAttemptsCount[0]?.count || 0;
     const pendingStatusCount = result.pendingCount[0]?.count || 0;
-    const successRate = allAttempts > 0 ? (paidTotals.count / allAttempts) * 100 : 100;
+    const successRate =
+      allAttempts > 0 ? (paidTotals.count / allAttempts) * 100 : 100;
 
     // 2. Platform Commission Calculation
-    const commissionSetting = await Settings.findOne({ key: "platform_commission" });
-    const commissionRate = commissionSetting ? parseFloat(commissionSetting.value) : 10;
-    
+    const commissionSetting = await Settings.findOne({
+      key: "platform_commission",
+    });
+    const commissionRate = commissionSetting
+      ? parseFloat(commissionSetting.value)
+      : 10;
+
     // 3. Top Organizers (only paid)
     const topOrganizersStats = await Purchase.aggregate([
       { $match: { status: "PAID" } },
@@ -1146,18 +1369,20 @@ export class PurchaseService {
           from: "events",
           localField: "eventId",
           foreignField: "_id",
-          as: "event"
-        }
+          as: "event",
+        },
       },
       { $unwind: "$event" },
       {
         $group: {
           _id: "$event.organizerId",
           revenue: { $sum: "$amount" },
-          eventCount: { $addToSet: "$eventId" }
-        }
+          eventCount: { $addToSet: "$eventId" },
+        },
       },
-      { $project: { _id: 1, revenue: 1, eventCount: { $size: "$eventCount" } } },
+      {
+        $project: { _id: 1, revenue: 1, eventCount: { $size: "$eventCount" } },
+      },
       { $sort: { revenue: -1 } },
       { $limit: 5 },
       {
@@ -1165,8 +1390,8 @@ export class PurchaseService {
           from: "users",
           localField: "_id",
           foreignField: "_id",
-          as: "organizer"
-        }
+          as: "organizer",
+        },
       },
       { $unwind: "$organizer" },
       {
@@ -1175,9 +1400,9 @@ export class PurchaseService {
           businessName: "$organizer.businessName",
           email: "$organizer.email",
           revenue: 1,
-          eventCount: 1
-        }
-      }
+          eventCount: 1,
+        },
+      },
     ]);
 
     return {
@@ -1189,11 +1414,11 @@ export class PurchaseService {
       organizerEarnings: paidTotals.total * (1 - commissionRate / 100),
       byType: result.byType.map((t: any) => ({
         ...t,
-        name: t.name === "VOTE" ? "Voting" : "Ticketing"
+        name: t.name === "VOTE" ? "Voting" : "Ticketing",
       })),
       trend: result.trend,
       topEvents: result.topEvents,
-      topOrganizers: topOrganizersStats
+      topOrganizers: topOrganizersStats,
     };
   }
 }
