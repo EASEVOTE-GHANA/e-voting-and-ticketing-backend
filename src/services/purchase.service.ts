@@ -930,7 +930,7 @@ export class PurchaseService {
 
     const [purchases, total] = await Promise.all([
       Purchase.find(filter)
-        .populate("eventId", "title type categories")
+        .populate("eventId", "title type categories ticketTypes")
         .populate("userId", "fullName email")
         .sort(sort as any)
         .skip(skip)
@@ -949,10 +949,18 @@ export class PurchaseService {
             break;
           }
         }
-        purchase.candidate = candidateObj;
+        purchase.candidate = candidateObj || { name: "Unknown Candidate", code: "N/A" };
+      } else if (purchase.type === "TICKET" && purchase.ticketTypeId && purchase.eventId?.ticketTypes) {
+        const tt = purchase.eventId.ticketTypes.find((t: any) => t._id?.toString() === purchase.ticketTypeId.toString());
+        if (tt) {
+          purchase.candidate = { name: tt.name, code: "Ticket" };
+        } else {
+          purchase.candidate = { name: "Unknown Ticket", code: "Ticket" };
+        }
       }
       if (purchase.eventId) {
         delete purchase.eventId.categories;
+        delete purchase.eventId.ticketTypes;
       }
       return purchase;
     });
@@ -1004,7 +1012,7 @@ export class PurchaseService {
 
     const [purchases, total] = await Promise.all([
       Purchase.find(filter)
-        .populate("eventId", "title type categories")
+        .populate("eventId", "title type categories ticketTypes")
         .populate("userId", "fullName email")
         .sort(sort as any)
         .skip(skip)
@@ -1023,10 +1031,18 @@ export class PurchaseService {
             break;
           }
         }
-        purchase.candidate = candidateObj;
+        purchase.candidate = candidateObj || { name: "Unknown Candidate", code: "N/A" };
+      } else if (purchase.type === "TICKET" && purchase.ticketTypeId && purchase.eventId?.ticketTypes) {
+        const tt = purchase.eventId.ticketTypes.find((t: any) => t._id?.toString() === purchase.ticketTypeId.toString());
+        if (tt) {
+          purchase.candidate = { name: tt.name, code: "Ticket" };
+        } else {
+          purchase.candidate = { name: "Unknown Ticket", code: "Ticket" };
+        }
       }
       if (purchase.eventId) {
         delete purchase.eventId.categories;
+        delete purchase.eventId.ticketTypes;
       }
       return purchase;
     });
